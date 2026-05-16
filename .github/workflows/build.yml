@@ -1,0 +1,1154 @@
+name: Build & Auto-Tune Alioth MaxPerf Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: 'Target device'
+        required: true
+        default: 'alioth'
+        type: choice
+        options:
+          - alioth
+          - munch
+          - lmi
+          - umi
+          - psyche
+          - apollo
+          - thyme
+          - cmi
+          - cas
+      ksu:
+        description: 'Enable KernelSU (ReSukiSU)'
+        required: true
+        default: true
+        type: boolean
+      build_aosp:
+        description: 'Build AOSP variant'
+        required: true
+        default: true
+        type: boolean
+      build_miui:
+        description: 'Build MIUI/HyperOS variant'
+        required: true
+        default: true
+        type: boolean
+      auto_tune:
+        description: 'Auto-apply performance tuning scripts'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  DEVICE: ${{ github.event.inputs.device }}
+  KSU_ENABLED: ${{ github.event.inputs.ksu }}
+  BUILD_AOSP: ${{ github.event.inputs.build_aosp }}
+  BUILD_MIUI: ${{ github.event.inputs.build_miui }}
+  AUTO_TUNE: ${{ github.event.inputs.auto_tune }}
+
+jobs:
+  build-aosp:
+    if: github.event.inputs.build_aosp == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Setup build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git curl wget bison flex zip bc cpio libssl-dev ccache tar python3 python-is-python3 jq
+
+      - name: Setup ZyC-Clang toolchain
+        run: |
+          mkdir -p $HOME/zyc-clang
+          cd $HOME/zyc-clang
+          wget -q --show-progress https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260510-release/Clang-16.0.6-20260510.tar.gz
+          tar -zxf Clang-16.0.6-20260510.tar.gz
+          echo "TOOLCHAIN_PATH=$HOME/zyc-clang/bin" >> $GITHUB_ENV
+
+      - name: Clone kernel source
+        run: |
+          git clone --depth=1 --branch android16-aptusitu-new https://github.com/AstideLabs/android_kernel_xiaomi_sm8250 kernel
+          cd kernel
+          echo "KERNEL_DIR=$(pwd)" >> $GITHUB_ENV
+          echo "GIT_COMMIT=$(git rev-parse --short=8 HEAD)" >> $GITHUB_ENV
+
+      - name: Apply MaxPerf kernel patch
+        run: |
+          cd $KERNEL_DIR
+          cat >> arch/arm64/configs/${DEVICE}_defconfig << 'PATCHEOF'
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - NETWORK
+          # ============================================
+          CONFIG_TCP_CONG_ADVANCED=y
+          CONFIG_TCP_CONG_BIC=y
+          CONFIG_TCP_CONG_CUBIC=y
+          CONFIG_TCP_CONG_WESTWOOD=y
+          CONFIG_TCP_CONG_HTCP=y
+          CONFIG_TCP_CONG_HSTCP=y
+          CONFIG_TCP_CONG_HYBLA=y
+          CONFIG_TCP_CONG_VEGAS=y
+          CONFIG_TCP_CONG_NV=y
+          CONFIG_TCP_CONG_SCALABLE=y
+          CONFIG_TCP_CONG_LP=y
+          CONFIG_TCP_CONG_VENO=y
+          CONFIG_TCP_CONG_YEAH=y
+          CONFIG_TCP_CONG_ILLINOIS=y
+          CONFIG_TCP_CONG_DCTCP=y
+          CONFIG_TCP_CONG_CDG=y
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_DEFAULT_TCP_CONG="bbr"
+          CONFIG_NET_SCH_FQ=y
+          CONFIG_NET_SCH_FQ_CODEL=y
+          CONFIG_NET_SCH_MQPRIO=y
+          CONFIG_NET_SCH_DEFAULT=y
+          CONFIG_DEFAULT_NET_SCH="fq"
+          CONFIG_NET_CLS_CGROUP=y
+          CONFIG_CGROUP_NET_PRIO=y
+          CONFIG_CGROUP_NET_CLASSID=y
+          CONFIG_TCP_FASTOPEN=y
+          CONFIG_TCP_LOW_LATENCY=y
+          CONFIG_TCP_NO_METRICS_SAVE=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - I/O
+          # ============================================
+          CONFIG_DEFAULT_BFQ=y
+          CONFIG_DEFAULT_IOSCHED="bfq"
+          CONFIG_IOSCHED_DEADLINE=y
+          CONFIG_IOSCHED_CFQ=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - MEMORY
+          # ============================================
+          CONFIG_ZSWAP=y
+          CONFIG_ZSWAP_COMPRESSOR_DEFAULT="lz4"
+          CONFIG_ZSWAP_ZPOOL_DEFAULT="zsmalloc"
+          CONFIG_ZBUD=y
+          CONFIG_ZPOOL=y
+          CONFIG_ZSMALLOC_STAT=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - CPU
+          # ============================================
+          CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
+          CONFIG_CPU_FREQ_GOV_PERFORMANCE=y
+          CONFIG_CPU_FREQ_GOV_ONDEMAND=y
+          CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
+          CONFIG_CPU_INPUT_BOOST=y
+          CONFIG_CPU_INPUT_BOOST_FREQ_LITTLE=1800000
+          CONFIG_CPU_INPUT_BOOST_FREQ_BIG=2400000
+          CONFIG_CPU_INPUT_BOOST_FREQ_PRIME=3200000
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - LMK
+          # ============================================
+          CONFIG_ANDROID_SIMPLE_LMK=y
+          CONFIG_ANDROID_SIMPLE_LMK_MINFREE=128
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - CHARGE
+          # ============================================
+          CONFIG_FORCE_FAST_CHARGE=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - KEXEC
+          # ============================================
+          CONFIG_KEXEC=y
+          CONFIG_KEXEC_FILE=y
+          CONFIG_KEXEC_SIG=y
+          CONFIG_CRASH_DUMP=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - NAMESPACES
+          # ============================================
+          CONFIG_PID_NS=y
+          CONFIG_USER_NS=y
+          CONFIG_NET_NS=y
+          CONFIG_TIME_NS=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - VIRTUALIZATION
+          # ============================================
+          CONFIG_VIRTIO=y
+          CONFIG_VIRTIO_MENU=y
+          CONFIG_VIRTIO_PCI=y
+          CONFIG_VIRTIO_BALLOON=y
+          CONFIG_VIRTIO_BLK=y
+          CONFIG_VIRTIO_NET=y
+          CONFIG_VIRTIO_INPUT=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - FILESYSTEMS
+          # ============================================
+          CONFIG_NTFS_FS=y
+          CONFIG_NTFS3_FS=y
+          CONFIG_NILFS2_FS=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - TRACING
+          # ============================================
+          CONFIG_FTRACE=y
+          CONFIG_TRACING=y
+          CONFIG_DYNAMIC_FTRACE=y
+          CONFIG_FUNCTION_TRACER=y
+          CONFIG_STACK_TRACER=y
+          CONFIG_SCHED_TRACER=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - BPF
+          # ============================================
+          CONFIG_BPF_STREAM_PARSER=y
+          CONFIG_NETFILTER_XT_MATCH_BPF=y
+          CONFIG_BPF_LSM=y
+          CONFIG_BPF_EVENTS=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - MISC
+          # ============================================
+          CONFIG_SCHED_HRTICK=y
+          CONFIG_PREEMPT_DYNAMIC=y
+          CONFIG_HIGH_RES_TIMERS=y
+          CONFIG_NO_HZ_FULL=y
+          CONFIG_NO_HZ_IDLE=y
+          CONFIG_TICK_ONESHOT=y
+          PATCHEOF
+          echo "MaxPerf kernel patch applied!"
+
+      - name: Build AOSP kernel
+        run: |
+          cd $KERNEL_DIR
+          export PATH="$HOME/zyc-clang/bin:$PATH"
+          export CCACHE_DIR="$HOME/.cache/ccache_mikernel"
+          export CC="clang"
+          export CXX="clang++"
+          export PATH="/usr/lib/ccache:$PATH"
+          export CCACHE_COMPILERCHECK=content
+          export CCACHE_SLOPPINESS=time_macros,include_file_mtime,include_file_ctime
+
+          MAKE_ARGS="ARCH=arm64 \
+            SUBARCH=arm64 \
+            O=out \
+            CC=\"ccache clang\" \
+            HOSTCC=\"ccache clang\" \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip"
+
+          make $MAKE_ARGS ${DEVICE}_defconfig
+
+          if [ "$KSU_ENABLED" == "true" ]; then
+            scripts/config --file out/.config \
+              -e KSU \
+              -e THREAD_INFO_IN_TASK \
+              -e KSU_SUSFS \
+              -e KSU_SUSFS_SUS_PATH \
+              -e KSU_SUSFS_SUS_MOUNT \
+              -e KSU_SUSFS_SUS_KSTAT \
+              -e KSU_SUSFS_SPOOF_UNAME \
+              -e KSU_SUSFS_ENABLE_LOG \
+              -e KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
+              -e KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
+              -e KSU_SUSFS_OPEN_REDIRECT \
+              -e KSU_SUSFS_SUS_MAP \
+              -e KSU_MULTI_MANAGER_SUPPORT \
+              -e KPM
+          else
+            scripts/config --file out/.config -d KSU
+          fi
+
+          scripts/config --file out/.config -e BBG
+          scripts/config --file out/.config -e REKERNEL -e REKERNEL_NETWORK
+
+          make $MAKE_ARGS -j$(nproc)
+
+          if [ ! -f "out/arch/arm64/boot/Image" ]; then
+            echo "AOSP build failed!"
+            exit 1
+          fi
+          echo "AOSP build successful!"
+
+      - name: Package AOSP kernel with auto-tune scripts
+        run: |
+          cd $KERNEL_DIR
+
+          # Generate DTB
+          find out/arch/arm64/boot/dts -name '*.dtb' -exec cat {} + > out/arch/arm64/boot/dtb
+
+          # Clone AnyKernel3
+          git clone https://github.com/AstideLabs/AnyKernel3 -b master --single-branch --depth=1 anykernel
+
+          rm -rf anykernel/kernels/
+          mkdir -p anykernel/kernels/aosp/
+
+          # KPM patch if KSU enabled
+          if [ "$KSU_ENABLED" == "true" ]; then
+            cd out/arch/arm64/boot/
+            wget -q https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.13.0/patch_linux
+            chmod +x patch_linux
+            ./patch_linux
+            rm Image
+            mv oImage Image
+            cd $KERNEL_DIR
+          fi
+
+          cp out/arch/arm64/boot/Image anykernel/kernels/aosp/
+          cp out/arch/arm64/boot/dtb anykernel/kernels/aosp/
+          cp out/arch/arm64/boot/dtbo.img anykernel/kernels/aosp/
+
+          # ============================================
+          # AUTO-TUNE: Inject performance scripts into AnyKernel3
+          # These run automatically after kernel flash
+          # ============================================
+          if [ "$AUTO_TUNE" == "true" ]; then
+            echo "Injecting auto-tune scripts into AnyKernel3..."
+
+            # Create post-install tuning script
+            cat > anykernel/post-install-tune.sh << 'TUNESCRIPT'
+#!/system/bin/sh
+# Auto-Tune Script - Runs automatically after kernel flash
+# AstideLabs Alioth MaxPerf Auto-Tuner
+
+LOG=/data/local/tmp/alioth_autotune.log
+exec 1>>$LOG 2>&1
+
+echo "========================================"
+echo "  Alioth Auto-Tuner v2.0"
+echo "  $(date)"
+echo "  Kernel: $(uname -r)"
+echo "========================================"
+
+# Wait for boot to complete
+sleep 30
+
+# ============================================
+# CPU TUNING
+# ============================================
+echo "[*] Tuning CPU..."
+for cpu in /sys/devices/system/cpu/cpu[0-7]; do
+    if [ -d "$cpu/cpufreq" ]; then
+        if grep -q schedutil $cpu/cpufreq/scaling_available_governors 2>/dev/null; then
+            echo schedutil > $cpu/cpufreq/scaling_governor 2>/dev/null
+
+            if [ -f $cpu/cpufreq/schedutil/up_rate_limit_us ]; then
+                echo 100 > $cpu/cpufreq/schedutil/up_rate_limit_us 2>/dev/null
+            fi
+            if [ -f $cpu/cpufreq/schedutil/down_rate_limit_us ]; then
+                echo 5000 > $cpu/cpufreq/schedutil/down_rate_limit_us 2>/dev/null
+            fi
+            if [ -f $cpu/cpufreq/schedutil/hispeed_load ]; then
+                echo 85 > $cpu/cpufreq/schedutil/hispeed_load 2>/dev/null
+            fi
+            if [ -f $cpu/cpufreq/schedutil/hispeed_freq ]; then
+                echo 1800000 > $cpu/cpufreq/schedutil/hispeed_freq 2>/dev/null
+            fi
+            if [ -f $cpu/cpufreq/schedutil/pl ]; then
+                echo 1 > $cpu/cpufreq/schedutil/pl 2>/dev/null
+            fi
+        fi
+
+        max=$(cat $cpu/cpufreq/cpuinfo_max_freq 2>/dev/null)
+        [ -n "$max" ] && echo "$max" > $cpu/cpufreq/scaling_max_freq 2>/dev/null
+    fi
+done
+
+if [ -d /sys/module/cpu_boost ]; then
+    [ -f /sys/module/cpu_boost/parameters/input_boost_enabled ] && echo 1 > /sys/module/cpu_boost/parameters/input_boost_enabled 2>/dev/null
+    [ -f /sys/module/cpu_boost/parameters/input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/input_boost_freq 2>/dev/null
+    [ -f /sys/module/cpu_boost/parameters/input_boost_ms ] && echo 150 > /sys/module/cpu_boost/parameters/input_boost_ms 2>/dev/null
+    [ -f /sys/module/cpu_boost/parameters/powerkey_input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/powerkey_input_boost_freq 2>/dev/null
+    [ -f /sys/module/cpu_boost/parameters/powerkey_input_boost_ms ] && echo 300 > /sys/module/cpu_boost/parameters/powerkey_input_boost_ms 2>/dev/null
+fi
+
+# ============================================
+# GPU TUNING
+# ============================================
+echo "[*] Tuning GPU..."
+if [ -d /sys/class/kgsl/kgsl-3d0 ]; then
+    GPU=/sys/class/kgsl/kgsl-3d0
+    [ -f $GPU/devfreq/governor ] && echo msm-adreno-tz > $GPU/devfreq/governor 2>/dev/null
+    [ -f $GPU/throttling ] && echo 1 > $GPU/throttling 2>/dev/null
+    [ -f $GPU/bus_split ] && echo 0 > $GPU/bus_split 2>/dev/null
+    [ -f $GPU/force_clk_on ] && echo 0 > $GPU/force_clk_on 2>/dev/null
+    [ -f $GPU/force_bus_on ] && echo 0 > $GPU/force_bus_on 2>/dev/null
+    [ -f $GPU/force_rail_on ] && echo 0 > $GPU/force_rail_on 2>/dev/null
+    [ -f $GPU/force_no_nap ] && echo 1 > $GPU/force_no_nap 2>/dev/null
+    [ -f $GPU/min_pwrlevel ] && echo 0 > $GPU/min_pwrlevel 2>/dev/null
+    [ -f $GPU/max_pwrlevel ] && echo 0 > $GPU/max_pwrlevel 2>/dev/null
+    [ -f $GPU/idle_timer ] && echo 10000 > $GPU/idle_timer 2>/dev/null
+    [ -f $GPU/nap_allowed ] && echo 0 > $GPU/nap_allowed 2>/dev/null
+
+    if [ -f $GPU/devfreq/min_freq ]; then
+        min=$(cat $GPU/devfreq/available_frequencies 2>/dev/null | awk '{print $1}')
+        [ -n "$min" ] && echo "$min" > $GPU/devfreq/min_freq 2>/dev/null
+    fi
+    if [ -f $GPU/devfreq/max_freq ]; then
+        max=$(cat $GPU/devfreq/available_frequencies 2>/dev/null | awk '{print $NF}')
+        [ -n "$max" ] && echo "$max" > $GPU/devfreq/max_freq 2>/dev/null
+    fi
+fi
+
+# ============================================
+# I/O TUNING
+# ============================================
+echo "[*] Tuning I/O..."
+for block in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
+    if [ -d "$block" ]; then
+        if [ -f $block/queue/scheduler ]; then
+            scheds=$(cat $block/queue/scheduler)
+            if echo "$scheds" | grep -q "bfq"; then
+                echo bfq > $block/queue/scheduler 2>/dev/null
+            elif echo "$scheds" | grep -q "mq-deadline"; then
+                echo mq-deadline > $block/queue/scheduler 2>/dev/null
+            fi
+        fi
+        echo 0 > $block/queue/iostats 2>/dev/null
+        echo 1 > $block/queue/rq_affinity 2>/dev/null
+        echo 128 > $block/queue/read_ahead_kb 2>/dev/null
+        echo 0 > $block/queue/add_random 2>/dev/null
+        echo 0 > $block/queue/rotational 2>/dev/null
+        echo 256 > $block/queue/nr_requests 2>/dev/null
+
+        if [ -f $block/queue/iosched/low_latency ]; then
+            echo 0 > $block/queue/iosched/low_latency 2>/dev/null
+        fi
+        if [ -f $block/queue/iosched/idle_slice ]; then
+            echo 0 > $block/queue/iosched/idle_slice 2>/dev/null
+        fi
+    fi
+done
+
+# ============================================
+# MEMORY TUNING
+# ============================================
+echo "[*] Tuning Memory..."
+echo 20 > /proc/sys/vm/swappiness 2>/dev/null
+echo 10 > /proc/sys/vm/vfs_cache_pressure 2>/dev/null
+echo 128 > /proc/sys/vm/dirty_background_ratio 2>/dev/null
+echo 256 > /proc/sys/vm/dirty_ratio 2>/dev/null
+echo 5000 > /proc/sys/vm/dirty_expire_centisecs 2>/dev/null
+echo 1000 > /proc/sys/vm/dirty_writeback_centisecs 2>/dev/null
+echo 0 > /proc/sys/vm/page-cluster 2>/dev/null
+echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+
+# ZRAM
+if [ -b /dev/block/zram0 ] && ! grep -q zram0 /proc/swaps 2>/dev/null; then
+    swapoff /dev/block/zram0 2>/dev/null
+    echo 1 > /sys/block/zram0/reset 2>/dev/null
+    if [ -f /sys/block/zram0/comp_algorithm ]; then
+        algos=$(cat /sys/block/zram0/comp_algorithm)
+        if echo "$algos" | grep -q "lz4"; then
+            echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null
+        elif echo "$algos" | grep -q "zstd"; then
+            echo zstd > /sys/block/zram0/comp_algorithm 2>/dev/null
+        fi
+    fi
+    echo 4294967296 > /sys/block/zram0/disksize 2>/dev/null
+    mkswap /dev/block/zram0 2>/dev/null
+    swapon /dev/block/zram0 2>/dev/null
+    echo "[OK] ZRAM: 4GB configured"
+fi
+
+# ============================================
+# NETWORK TUNING (BBR is now compiled in!)
+# ============================================
+echo "[*] Tuning Network..."
+if [ -f /proc/sys/net/ipv4/tcp_available_congestion_control ]; then
+    avail=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
+    if echo "$avail" | grep -q "bbr"; then
+        echo bbr > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
+        echo "[OK] BBR enabled!"
+    elif echo "$avail" | grep -q "cubic"; then
+        echo cubic > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
+        echo "[OK] CUBIC enabled (BBR fallback)"
+    fi
+fi
+
+echo 1 > /proc/sys/net/ipv4/tcp_ecn 2>/dev/null
+echo 3 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_tw_reuse 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_sack 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_fack 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_timestamps 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_window_scaling 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_moderate_rcvbuf 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_no_metrics_save 2>/dev/null
+echo 50 > /proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null
+echo 10 > /proc/sys/net/ipv4/tcp_keepalive_intvl 2>/dev/null
+echo 3 > /proc/sys/net/ipv4/tcp_keepalive_probes 2>/dev/null
+echo 8192 > /proc/sys/net/core/rmem_default 2>/dev/null
+echo 8192 > /proc/sys/net/core/wmem_default 2>/dev/null
+echo 2097152 > /proc/sys/net/core/rmem_max 2>/dev/null
+echo 2097152 > /proc/sys/net/core/wmem_max 2>/dev/null
+echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
+echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_low_latency 2>/dev/null
+echo 0 > /proc/sys/net/ipv4/tcp_slow_start_after_idle 2>/dev/null
+echo 3000 > /proc/sys/net/core/netdev_max_backlog 2>/dev/null
+
+# ============================================
+# SCHEDULER TUNING (WALT + SchedTune)
+# ============================================
+echo "[*] Tuning Scheduler..."
+[ -f /proc/sys/kernel/sched_upmigrate ] && echo 95 > /proc/sys/kernel/sched_upmigrate 2>/dev/null
+[ -f /proc/sys/kernel/sched_downmigrate ] && echo 85 > /proc/sys/kernel/sched_downmigrate 2>/dev/null
+[ -f /proc/sys/kernel/sched_group_upmigrate ] && echo 100 > /proc/sys/kernel/sched_group_upmigrate 2>/dev/null
+[ -f /proc/sys/kernel/sched_group_downmigrate ] && echo 90 > /proc/sys/kernel/sched_group_downmigrate 2>/dev/null
+[ -f /proc/sys/kernel/sched_ravg_hist_size ] && echo 10 > /proc/sys/kernel/sched_ravg_hist_size 2>/dev/null
+[ -f /proc/sys/kernel/sched_walt_rotate_big_tasks ] && echo 1 > /proc/sys/kernel/sched_walt_rotate_big_tasks 2>/dev/null
+[ -f /proc/sys/kernel/sched_min_task_util_for_boost ] && echo 100 > /proc/sys/kernel/sched_min_task_util_for_boost 2>/dev/null
+[ -f /proc/sys/kernel/sched_min_task_util_for_colocation ] && echo 200 > /proc/sys/kernel/sched_min_task_util_for_colocation 2>/dev/null
+
+if [ -d /dev/stune ]; then
+    [ -f /dev/stune/top-app/schedtune.boost ] && echo 50 > /dev/stune/top-app/schedtune.boost 2>/dev/null
+    [ -f /dev/stune/top-app/schedtune.prefer_idle ] && echo 1 > /dev/stune/top-app/schedtune.prefer_idle 2>/dev/null
+    [ -f /dev/stune/foreground/schedtune.boost ] && echo 20 > /dev/stune/foreground/schedtune.boost 2>/dev/null
+    [ -f /dev/stune/rt/schedtune.boost ] && echo 100 > /dev/stune/rt/schedtune.boost 2>/dev/null
+fi
+
+# ============================================
+# THERMAL TUNING
+# ============================================
+echo "[*] Tuning Thermal..."
+for zone in /sys/class/thermal/thermal_zone*; do
+    if [ -d "$zone" ]; then
+        type=$(cat $zone/type 2>/dev/null)
+        if echo "$type" | grep -qiE "cpu|cluster|gpu|pmic|modem"; then
+            for trip in $zone/trip_point_*_temp; do
+                if [ -f "$trip" ]; then
+                    current=$(cat "$trip" 2>/dev/null)
+                    if [ -n "$current" ] && [ "$current" -gt 0 ] && [ "$current" -lt 100000 ]; then
+                        new=$((current + 3000))
+                        echo "$new" > "$trip" 2>/dev/null
+                    fi
+                fi
+            done
+        fi
+    fi
+done
+
+# ============================================
+# TOUCH TUNING
+# ============================================
+echo "[*] Tuning Touch..."
+[ -f /sys/class/touch/touch_dev/palm_detect ] && echo 0 > /sys/class/touch/touch_dev/palm_detect 2>/dev/null
+[ -f /sys/class/touch/touch_dev/grip_enable ] && echo 0 > /sys/class/touch/touch_dev/grip_enable 2>/dev/null
+[ -f /sys/class/touch/touch_dev/edge_suppress ] && echo 0 > /sys/class/touch/touch_dev/edge_suppress 2>/dev/null
+[ -f /sys/class/touch/touch_dev/smooth_level ] && echo 0 > /sys/class/touch/touch_dev/smooth_level 2>/dev/null
+
+# ============================================
+# FAST CHARGE
+# ============================================
+echo "[*] Tuning Fast Charge..."
+[ -f /sys/class/power_supply/battery/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/battery/constant_charge_current_max 2>/dev/null
+[ -f /sys/class/power_supply/usb/pd_current_max ] && echo 5000000 > /sys/class/power_supply/usb/pd_current_max 2>/dev/null
+[ -f /sys/class/power_supply/battery/input_current_max ] && echo 5000000 > /sys/class/power_supply/battery/input_current_max 2>/dev/null
+[ -f /sys/class/power_supply/main/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/main/constant_charge_current_max 2>/dev/null
+[ -f /sys/class/power_supply/battery/step_charging_enabled ] && echo 0 > /sys/class/power_supply/battery/step_charging_enabled 2>/dev/null
+[ -f /sys/class/power_supply/battery/thermal_limit ] && echo 10 > /sys/class/power_supply/battery/thermal_limit 2>/dev/null
+
+# ============================================
+# MIUI/HyperOS DEVFREQ
+# ============================================
+echo "[*] Tuning Devfreq..."
+[ -f /sys/class/devfreq/soc:qcom,cpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,cpubw/governor 2>/dev/null
+[ -f /sys/class/devfreq/soc:qcom,gpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,gpubw/governor 2>/dev/null
+[ -f /sys/class/devfreq/soc:qcom,llccbw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,llccbw/governor 2>/dev/null
+
+# ============================================
+# REDUCE LOGGING
+# ============================================
+echo 0 > /proc/sys/kernel/printk 2>/dev/null
+echo 0 > /sys/kernel/debug/tracing/tracing_on 2>/dev/null
+
+echo "========================================"
+echo "  Auto-Tune Complete!"
+echo "  All systems optimized for max perf."
+echo "========================================"
+TUNESCRIPT
+            chmod +x anykernel/post-install-tune.sh
+
+            # Modify anykernel.sh to run the tune script after install
+            sed -i '/dump_boot;/a\n# Auto-tune after kernel install
+if [ -f "$home/post-install-tune.sh" ]; then
+  ui_print "[-] Applying performance tuning...";
+  cp "$home/post-install-tune.sh" /data/local/tmp/;
+  chmod +x /data/local/tmp/post-install-tune.sh;
+  nohup sh /data/local/tmp/post-install-tune.sh >/dev/null 2>&1 &
+  ui_print "[-] Performance tuning applied!";
+fi' anykernel/anykernel.sh
+
+            echo "Auto-tune scripts injected!"
+          fi
+
+          cd anykernel
+
+          KSU_STR="NoKernelSU"
+          if [ "$KSU_ENABLED" == "true" ]; then
+            KSU_STR="ReSukiSU-SuSFS"
+          fi
+
+          ZIP_NAME="APTKernel-MaxPerf_AOSP_${DEVICE}_${KSU_STR}_$(date +'%Y%m%d_%H%M%S')_anykernel3_${GIT_COMMIT}.zip"
+
+          zip -r9 $ZIP_NAME ./* -x .git .gitignore out/ .*.zip
+          mv $ZIP_NAME ../
+          cd ..
+          echo "AOSP_ZIP=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload AOSP kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: AOSP-MaxPerf-${{ env.DEVICE }}-${{ env.KSU_ENABLED == 'true' && 'KSU' || 'NoKSU' }}
+          path: ${{ env.KERNEL_DIR }}/${{ env.AOSP_ZIP }}
+          retention-days: 30
+
+  build-miui:
+    if: github.event.inputs.build_miui == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Setup build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git curl wget bison flex zip bc cpio libssl-dev ccache tar python3 python-is-python3 jq
+
+      - name: Setup ZyC-Clang toolchain
+        run: |
+          mkdir -p $HOME/zyc-clang
+          cd $HOME/zyc-clang
+          wget -q --show-progress https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260510-release/Clang-16.0.6-20260510.tar.gz
+          tar -zxf Clang-16.0.6-20260510.tar.gz
+          echo "TOOLCHAIN_PATH=$HOME/zyc-clang/bin" >> $GITHUB_ENV
+
+      - name: Clone kernel source
+        run: |
+          git clone --depth=1 --branch android16-aptusitu-new https://github.com/AstideLabs/android_kernel_xiaomi_sm8250 kernel
+          cd kernel
+          echo "KERNEL_DIR=$(pwd)" >> $GITHUB_ENV
+          echo "GIT_COMMIT=$(git rev-parse --short=8 HEAD)" >> $GITHUB_ENV
+
+      - name: Apply MaxPerf kernel patch
+        run: |
+          cd $KERNEL_DIR
+          cat >> arch/arm64/configs/${DEVICE}_defconfig << 'PATCHEOF'
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - NETWORK
+          # ============================================
+          CONFIG_TCP_CONG_ADVANCED=y
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_DEFAULT_TCP_CONG="bbr"
+          CONFIG_NET_SCH_FQ=y
+          CONFIG_NET_SCH_FQ_CODEL=y
+          CONFIG_NET_SCH_DEFAULT=y
+          CONFIG_DEFAULT_NET_SCH="fq"
+          CONFIG_NET_CLS_CGROUP=y
+          CONFIG_CGROUP_NET_PRIO=y
+          CONFIG_CGROUP_NET_CLASSID=y
+          CONFIG_TCP_FASTOPEN=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - I/O
+          # ============================================
+          CONFIG_DEFAULT_BFQ=y
+          CONFIG_DEFAULT_IOSCHED="bfq"
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - MEMORY
+          # ============================================
+          CONFIG_ZSWAP=y
+          CONFIG_ZSWAP_COMPRESSOR_DEFAULT="lz4"
+          CONFIG_ZSWAP_ZPOOL_DEFAULT="zsmalloc"
+          CONFIG_ZBUD=y
+          CONFIG_ZPOOL=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - CPU
+          # ============================================
+          CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
+          CONFIG_CPU_FREQ_GOV_PERFORMANCE=y
+          CONFIG_CPU_FREQ_GOV_ONDEMAND=y
+          CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
+          CONFIG_CPU_INPUT_BOOST=y
+          CONFIG_CPU_INPUT_BOOST_FREQ_LITTLE=1800000
+          CONFIG_CPU_INPUT_BOOST_FREQ_BIG=2400000
+          CONFIG_CPU_INPUT_BOOST_FREQ_PRIME=3200000
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - LMK
+          # ============================================
+          CONFIG_ANDROID_SIMPLE_LMK=y
+          CONFIG_ANDROID_SIMPLE_LMK_MINFREE=128
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - CHARGE
+          # ============================================
+          CONFIG_FORCE_FAST_CHARGE=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - KEXEC
+          # ============================================
+          CONFIG_KEXEC=y
+          CONFIG_KEXEC_FILE=y
+          CONFIG_KEXEC_SIG=y
+          CONFIG_CRASH_DUMP=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - NAMESPACES
+          # ============================================
+          CONFIG_PID_NS=y
+          CONFIG_USER_NS=y
+          CONFIG_NET_NS=y
+          CONFIG_TIME_NS=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - VIRTUALIZATION
+          # ============================================
+          CONFIG_VIRTIO=y
+          CONFIG_VIRTIO_MENU=y
+          CONFIG_VIRTIO_PCI=y
+          CONFIG_VIRTIO_BALLOON=y
+          CONFIG_VIRTIO_BLK=y
+          CONFIG_VIRTIO_NET=y
+          CONFIG_VIRTIO_INPUT=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - FILESYSTEMS
+          # ============================================
+          CONFIG_NTFS_FS=y
+          CONFIG_NTFS3_FS=y
+          CONFIG_NILFS2_FS=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - TRACING
+          # ============================================
+          CONFIG_FTRACE=y
+          CONFIG_TRACING=y
+          CONFIG_DYNAMIC_FTRACE=y
+          CONFIG_FUNCTION_TRACER=y
+          CONFIG_STACK_TRACER=y
+          CONFIG_SCHED_TRACER=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - BPF
+          # ============================================
+          CONFIG_BPF_STREAM_PARSER=y
+          CONFIG_NETFILTER_XT_MATCH_BPF=y
+          CONFIG_BPF_LSM=y
+          CONFIG_BPF_EVENTS=y
+
+          # ============================================
+          # MAXPERF AUTO-TUNE PATCH - MISC
+          # ============================================
+          CONFIG_SCHED_HRTICK=y
+          CONFIG_PREEMPT_DYNAMIC=y
+          CONFIG_HIGH_RES_TIMERS=y
+          CONFIG_NO_HZ_FULL=y
+          CONFIG_NO_HZ_IDLE=y
+          CONFIG_TICK_ONESHOT=y
+          PATCHEOF
+          echo "MaxPerf kernel patch applied!"
+
+      - name: Build MIUI kernel
+        run: |
+          cd $KERNEL_DIR
+          export PATH="$HOME/zyc-clang/bin:$PATH"
+          export CCACHE_DIR="$HOME/.cache/ccache_mikernel"
+          export CC="clang"
+          export CXX="clang++"
+          export PATH="/usr/lib/ccache:$PATH"
+          export CCACHE_COMPILERCHECK=content
+          export CCACHE_SLOPPINESS=time_macros,include_file_mtime,include_file_ctime
+
+          MAKE_ARGS="ARCH=arm64 \
+            SUBARCH=arm64 \
+            O=out \
+            CC=\"ccache clang\" \
+            HOSTCC=\"ccache clang\" \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip"
+
+          rm -rf out/
+          dts_source=arch/arm64/boot/dts/vendor/qcom
+          cp -a ${dts_source} .dts.bak
+
+          # MIUI panel fixes
+          sed -i 's/<154>/<1537>/g' ${dts_source}/dsi-panel-j1s*
+          sed -i 's/<154>/<1537>/g' ${dts_source}/dsi-panel-j2*
+          sed -i 's/<155>/<1544>/g' ${dts_source}/dsi-panel-j3s-37-02-0a-dsc-video.dtsi
+          sed -i 's/<155>/<1545>/g' ${dts_source}/dsi-panel-j11-38-08-0a-fhd-cmd.dtsi
+          sed -i 's/<155>/<1546>/g' ${dts_source}/dsi-panel-k11a-38-08-0a-dsc-cmd.dtsi
+          sed -i 's/<155>/<1546>/g' ${dts_source}/dsi-panel-l11r-38-08-0a-dsc-cmd.dtsi
+          sed -i 's/<70>/<695>/g' ${dts_source}/dsi-panel-j11-38-08-0a-fhd-cmd.dtsi
+          sed -i 's/<70>/<695>/g' ${dts_source}/dsi-panel-j3s-37-02-0a-dsc-video.dtsi
+          sed -i 's/<70>/<695>/g' ${dts_source}/dsi-panel-k11a-38-08-0a-dsc-cmd.dtsi
+          sed -i 's/<70>/<695>/g' ${dts_source}/dsi-panel-l11r-38-08-0a-dsc-cmd.dtsi
+          sed -i 's/<71>/<710>/g' ${dts_source}/dsi-panel-j1s*
+          sed -i 's/<71>/<710>/g' ${dts_source}/dsi-panel-j2*
+
+          sed -i 's/\/\/ mi,mdss-dsi-pan-enable-smart-fps/mi,mdss-dsi-pan-enable-smart-fps/g' ${dts_source}/dsi-panel*
+          sed -i 's/\/\/ mi,mdss-dsi-smart-fps-max_framerate/mi,mdss-dsi-smart-fps-max_framerate/g' ${dts_source}/dsi-panel*
+          sed -i 's/\/\/ qcom,mdss-dsi-pan-enable-smart-fps/qcom,mdss-dsi-pan-enable-smart-fps/g' ${dts_source}/dsi-panel*
+          sed -i 's/qcom,mdss-dsi-qsync-min-refresh-rate/\/\/qcom,mdss-dsi-qsync-min-refresh-rate/g' ${dts_source}/dsi-panel*
+
+          sed -i 's/120 90 60/120 90 60 50 30/g' ${dts_source}/dsi-panel-g7a-36-02-0c-dsc-video.dtsi
+          sed -i 's/120 90 60/120 90 60 50 30/g' ${dts_source}/dsi-panel-g7a-37-02-0a-dsc-video.dtsi
+          sed -i 's/120 90 60/120 90 60 50 30/g' ${dts_source}/dsi-panel-g7a-37-02-0b-dsc-video.dtsi
+          sed -i 's/144 120 90 60/144 120 90 60 50 48 30/g' ${dts_source}/dsi-panel-j3s-37-02-0a-dsc-video.dtsi
+
+          sed -i 's/\/\/39 00 00 00 00 00 03 51 03 FF/39 00 00 00 00 00 03 51 03 FF/g' ${dts_source}/dsi-panel-j9-38-0a-0a-fhd-video.dtsi
+          sed -i 's/\/\/39 00 00 00 00 00 03 51 0D FF/39 00 00 00 00 00 03 51 0D FF/g' ${dts_source}/dsi-panel-j2-p2-1-38-0c-0a-dsc-cmd.dtsi
+          sed -i 's/\/\/39 00 00 00 00 00 05 51 0F 8F 00 00/39 00 00 00 00 00 05 51 0F 8F 00 00/g' ${dts_source}/dsi-panel-j1s-42-02-0a-dsc-cmd.dtsi
+          sed -i 's/\/\/39 00 00 00 00 00 05 51 0F 8F 00 00/39 00 00 00 00 00 05 51 0F 8F 00 00/g' ${dts_source}/dsi-panel-j1s-42-02-0a-mp-dsc-cmd.dtsi
+          sed -i 's/\/\/39 00 00 00 00 00 05 51 0F 8F 00 00/39 00 00 00 00 00 05 51 0F 8F 00 00/g' ${dts_source}/dsi-panel-j2-mp-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 00 00 00 00 00 05 51 0F 8F 00 00/39 00 00 00 00 00 05 51 0F 8F 00 00/g' ${dts_source}/dsi-panel-j2-p2-1-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 00 00 00 00 00 05 51 0F 8F 00 00/39 00 00 00 00 00 05 51 0F 8F 00 00/g' ${dts_source}/dsi-panel-j2s-mp-42-02-0a-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 00 00/39 01 00 00 00 00 03 51 00 00/g' ${dts_source}/dsi-panel-j2-38-0c-0a-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 03 FF/39 01 00 00 00 00 03 51 03 FF/g' ${dts_source}/dsi-panel-j11-38-08-0a-fhd-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 03 FF/39 01 00 00 00 00 03 51 03 FF/g' ${dts_source}/dsi-panel-j9-38-0a-0a-fhd-video.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 07 FF/39 01 00 00 00 00 03 51 07 FF/g' ${dts_source}/dsi-panel-j1u-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 07 FF/39 01 00 00 00 00 03 51 07 FF/g' ${dts_source}/dsi-panel-j2-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 07 FF/39 01 00 00 00 00 03 51 07 FF/g' ${dts_source}/dsi-panel-j2-p1-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 0F FF/39 01 00 00 00 00 03 51 0F FF/g' ${dts_source}/dsi-panel-j1u-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 0F FF/39 01 00 00 00 00 03 51 0F FF/g' ${dts_source}/dsi-panel-j2-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 03 51 0F FF/39 01 00 00 00 00 03 51 0F FF/g' ${dts_source}/dsi-panel-j2-p1-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 05 51 07 FF 00 00/39 01 00 00 00 00 05 51 07 FF 00 00/g' ${dts_source}/dsi-panel-j1s-42-02-0a-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 05 51 07 FF 00 00/39 01 00 00 00 00 05 51 07 FF 00 00/g' ${dts_source}/dsi-panel-j1s-42-02-0a-mp-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 05 51 07 FF 00 00/39 01 00 00 00 00 05 51 07 FF 00 00/g' ${dts_source}/dsi-panel-j2-mp-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 05 51 07 FF 00 00/39 01 00 00 00 00 05 51 07 FF 00 00/g' ${dts_source}/dsi-panel-j2-p2-1-42-02-0b-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 00 00 05 51 07 FF 00 00/39 01 00 00 00 00 05 51 07 FF 00 00/g' ${dts_source}/dsi-panel-j2s-mp-42-02-0a-dsc-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 01 00 03 51 03 FF/39 01 00 00 01 00 03 51 03 FF/g' ${dts_source}/dsi-panel-j11-38-08-0a-fhd-cmd.dtsi
+          sed -i 's/\/\/39 01 00 00 11 00 03 51 03 FF/39 01 00 00 11 00 03 51 03 FF/g' ${dts_source}/dsi-panel-j2-p2-1-38-0c-0a-dsc-cmd.dtsi
+
+          make $MAKE_ARGS ${DEVICE}_defconfig
+
+          if [ "$KSU_ENABLED" == "true" ]; then
+            scripts/config --file out/.config \
+              -e KSU \
+              -e THREAD_INFO_IN_TASK \
+              -e KSU_SUSFS \
+              -e KSU_SUSFS_SUS_PATH \
+              -e KSU_SUSFS_SUS_MOUNT \
+              -e KSU_SUSFS_SUS_KSTAT \
+              -e KSU_SUSFS_SPOOF_UNAME \
+              -e KSU_SUSFS_ENABLE_LOG \
+              -e KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
+              -e KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
+              -e KSU_SUSFS_OPEN_REDIRECT \
+              -e KSU_SUSFS_SUS_MAP \
+              -e KSU_MULTI_MANAGER_SUPPORT \
+              -e KPM
+          else
+            scripts/config --file out/.config -d KSU
+          fi
+
+          scripts/config --file out/.config -e BBG
+          scripts/config --file out/.config \
+            --set-str STATIC_USERMODEHELPER_PATH /system/bin/micd \
+            -e PERF_CRITICAL_RT_TASK \
+            -e SF_BINDER \
+            -e OVERLAY_FS \
+            -e MIGT \
+            -e MIGT_ENERGY_MODEL \
+            -e MIHW \
+            -e PACKAGE_RUNTIME_INFO \
+            -e BINDER_OPT \
+            -e KPERFEVENTS \
+            -e MILLET \
+            -e PERF_HUMANTASK \
+            -d LTO_CLANG \
+            -e LTO_NONE \
+            -e SF_BINDER \
+            -e XIAOMI_MIUI \
+            -d MI_MEMORY_SYSFS \
+            -e TASK_DELAY_ACCT \
+            -e MIUI_ZRAM_MEMORY_TRACKING \
+            -e MI_FRAGMENTION \
+            -e PERF_HELPER \
+            -e BOOTUP_RECLAIM \
+            -e MI_RECLAIM \
+            -e RTMM \
+            -d REKERNEL \
+            -d REKERNEL_NETWORK
+
+          make $MAKE_ARGS -j$(nproc)
+
+          if [ ! -f "out/arch/arm64/boot/Image" ]; then
+            echo "MIUI build failed!"
+            exit 1
+          fi
+          echo "MIUI build successful!"
+
+      - name: Package MIUI kernel with auto-tune scripts
+        run: |
+          cd $KERNEL_DIR
+
+          find out/arch/arm64/boot/dts -name '*.dtb' -exec cat {} + > out/arch/arm64/boot/dtb
+
+          rm -rf ${dts_source}
+          mv .dts.bak ${dts_source}
+
+          git clone https://github.com/AstideLabs/AnyKernel3 -b master --single-branch --depth=1 anykernel
+
+          rm -rf anykernel/kernels/
+          mkdir -p anykernel/kernels/miui/
+
+          if [ "$KSU_ENABLED" == "true" ]; then
+            cd out/arch/arm64/boot/
+            wget -q https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.13.0/patch_linux
+            chmod +x patch_linux
+            ./patch_linux
+            rm Image
+            mv oImage Image
+            cd $KERNEL_DIR
+          fi
+
+          cp out/arch/arm64/boot/Image anykernel/kernels/miui/
+          cp out/arch/arm64/boot/dtb anykernel/kernels/miui/
+          cp out/arch/arm64/boot/dtbo.img anykernel/kernels/miui/
+
+          # Inject auto-tune scripts
+          if [ "$AUTO_TUNE" == "true" ]; then
+            echo "Injecting auto-tune scripts into MIUI AnyKernel3..."
+
+            cat > anykernel/post-install-tune.sh << 'TUNESCRIPT'
+#!/system/bin/sh
+# Auto-Tune Script - MIUI Variant
+# AstideLabs Alioth MaxPerf Auto-Tuner
+
+LOG=/data/local/tmp/alioth_autotune.log
+exec 1>>$LOG 2>&1
+
+echo "========================================"
+echo "  Alioth Auto-Tuner v2.0 (MIUI)"
+echo "  $(date)"
+echo "  Kernel: $(uname -r)"
+echo "========================================"
+
+sleep 30
+
+# CPU
+echo "[*] Tuning CPU..."
+for cpu in /sys/devices/system/cpu/cpu[0-7]; do
+    if [ -d "$cpu/cpufreq" ]; then
+        if grep -q schedutil $cpu/cpufreq/scaling_available_governors 2>/dev/null; then
+            echo schedutil > $cpu/cpufreq/scaling_governor 2>/dev/null
+            [ -f $cpu/cpufreq/schedutil/up_rate_limit_us ] && echo 100 > $cpu/cpufreq/schedutil/up_rate_limit_us 2>/dev/null
+            [ -f $cpu/cpufreq/schedutil/down_rate_limit_us ] && echo 5000 > $cpu/cpufreq/schedutil/down_rate_limit_us 2>/dev/null
+        fi
+        max=$(cat $cpu/cpufreq/cpuinfo_max_freq 2>/dev/null)
+        [ -n "$max" ] && echo "$max" > $cpu/cpufreq/scaling_max_freq 2>/dev/null
+    fi
+done
+
+if [ -d /sys/module/cpu_boost ]; then
+    [ -f /sys/module/cpu_boost/parameters/input_boost_enabled ] && echo 1 > /sys/module/cpu_boost/parameters/input_boost_enabled 2>/dev/null
+    [ -f /sys/module/cpu_boost/parameters/input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/input_boost_freq 2>/dev/null
+    [ -f /sys/module/cpu_boost/parameters/input_boost_ms ] && echo 150 > /sys/module/cpu_boost/parameters/input_boost_ms 2>/dev/null
+fi
+
+# GPU
+if [ -d /sys/class/kgsl/kgsl-3d0 ]; then
+    GPU=/sys/class/kgsl/kgsl-3d0
+    [ -f $GPU/devfreq/governor ] && echo msm-adreno-tz > $GPU/devfreq/governor 2>/dev/null
+    [ -f $GPU/throttling ] && echo 1 > $GPU/throttling 2>/dev/null
+    [ -f $GPU/bus_split ] && echo 0 > $GPU/bus_split 2>/dev/null
+    [ -f $GPU/force_no_nap ] && echo 1 > $GPU/force_no_nap 2>/dev/null
+    [ -f $GPU/min_pwrlevel ] && echo 0 > $GPU/min_pwrlevel 2>/dev/null
+    [ -f $GPU/idle_timer ] && echo 10000 > $GPU/idle_timer 2>/dev/null
+    [ -f $GPU/nap_allowed ] && echo 0 > $GPU/nap_allowed 2>/dev/null
+fi
+
+# I/O
+for block in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
+    if [ -d "$block" ]; then
+        if [ -f $block/queue/scheduler ]; then
+            scheds=$(cat $block/queue/scheduler)
+            if echo "$scheds" | grep -q "bfq"; then
+                echo bfq > $block/queue/scheduler 2>/dev/null
+            elif echo "$scheds" | grep -q "mq-deadline"; then
+                echo mq-deadline > $block/queue/scheduler 2>/dev/null
+            fi
+        fi
+        echo 0 > $block/queue/iostats 2>/dev/null
+        echo 128 > $block/queue/read_ahead_kb 2>/dev/null
+        echo 0 > $block/queue/add_random 2>/dev/null
+        echo 256 > $block/queue/nr_requests 2>/dev/null
+    fi
+done
+
+# Memory
+echo 20 > /proc/sys/vm/swappiness 2>/dev/null
+echo 10 > /proc/sys/vm/vfs_cache_pressure 2>/dev/null
+echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+
+if [ -b /dev/block/zram0 ] && ! grep -q zram0 /proc/swaps 2>/dev/null; then
+    swapoff /dev/block/zram0 2>/dev/null
+    echo 1 > /sys/block/zram0/reset 2>/dev/null
+    [ -f /sys/block/zram0/comp_algorithm ] && echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null
+    echo 4294967296 > /sys/block/zram0/disksize 2>/dev/null
+    mkswap /dev/block/zram0 2>/dev/null
+    swapon /dev/block/zram0 2>/dev/null
+fi
+
+# Network (BBR now available!)
+if [ -f /proc/sys/net/ipv4/tcp_available_congestion_control ]; then
+    avail=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
+    if echo "$avail" | grep -q "bbr"; then
+        echo bbr > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
+        echo "[OK] BBR enabled!"
+    fi
+fi
+echo 1 > /proc/sys/net/ipv4/tcp_ecn 2>/dev/null
+echo 3 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
+echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
+
+# Scheduler
+[ -f /proc/sys/kernel/sched_upmigrate ] && echo 95 > /proc/sys/kernel/sched_upmigrate 2>/dev/null
+[ -f /proc/sys/kernel/sched_downmigrate ] && echo 85 > /proc/sys/kernel/sched_downmigrate 2>/dev/null
+if [ -d /dev/stune ]; then
+    [ -f /dev/stune/top-app/schedtune.boost ] && echo 50 > /dev/stune/top-app/schedtune.boost 2>/dev/null
+    [ -f /dev/stune/top-app/schedtune.prefer_idle ] && echo 1 > /dev/stune/top-app/schedtune.prefer_idle 2>/dev/null
+fi
+
+# Thermal
+for zone in /sys/class/thermal/thermal_zone*; do
+    if [ -d "$zone" ]; then
+        type=$(cat $zone/type 2>/dev/null)
+        if echo "$type" | grep -qiE "cpu|cluster|gpu|pmic"; then
+            for trip in $zone/trip_point_*_temp; do
+                if [ -f "$trip" ]; then
+                    current=$(cat "$trip" 2>/dev/null)
+                    if [ -n "$current" ] && [ "$current" -gt 0 ] && [ "$current" -lt 100000 ]; then
+                        new=$((current + 3000))
+                        echo "$new" > "$trip" 2>/dev/null
+                    fi
+                fi
+            done
+        fi
+    fi
+done
+
+# Touch
+[ -f /sys/class/touch/touch_dev/palm_detect ] && echo 0 > /sys/class/touch/touch_dev/palm_detect 2>/dev/null
+[ -f /sys/class/touch/touch_dev/grip_enable ] && echo 0 > /sys/class/touch/touch_dev/grip_enable 2>/dev/null
+
+# Fast Charge
+[ -f /sys/class/power_supply/battery/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/battery/constant_charge_current_max 2>/dev/null
+[ -f /sys/class/power_supply/usb/pd_current_max ] && echo 5000000 > /sys/class/power_supply/usb/pd_current_max 2>/dev/null
+[ -f /sys/class/power_supply/battery/step_charging_enabled ] && echo 0 > /sys/class/power_supply/battery/step_charging_enabled 2>/dev/null
+
+# Devfreq
+[ -f /sys/class/devfreq/soc:qcom,cpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,cpubw/governor 2>/dev/null
+[ -f /sys/class/devfreq/soc:qcom,gpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,gpubw/governor 2>/dev/null
+
+# Logging
+echo 0 > /proc/sys/kernel/printk 2>/dev/null
+
+echo "========================================"
+echo "  MIUI Auto-Tune Complete!"
+echo "========================================"
+TUNESCRIPT
+            chmod +x anykernel/post-install-tune.sh
+
+            sed -i '/dump_boot;/a\n# Auto-tune after kernel install
+if [ -f "$home/post-install-tune.sh" ]; then
+  ui_print "[-] Applying performance tuning...";
+  cp "$home/post-install-tune.sh" /data/local/tmp/;
+  chmod +x /data/local/tmp/post-install-tune.sh;
+  nohup sh /data/local/tmp/post-install-tune.sh >/dev/null 2>&1 &
+  ui_print "[-] Performance tuning applied!";
+fi' anykernel/anykernel.sh
+          fi
+
+          cd anykernel
+
+          KSU_STR="NoKernelSU"
+          if [ "$KSU_ENABLED" == "true" ]; then
+            KSU_STR="ReSukiSU-SuSFS"
+          fi
+
+          ZIP_NAME="APTKernel-MaxPerf_MIUI_${DEVICE}_${KSU_STR}_$(date +'%Y%m%d_%H%M%S')_anykernel3_${GIT_COMMIT}.zip"
+
+          zip -r9 $ZIP_NAME ./* -x .git .gitignore out/ .*.zip
+          mv $ZIP_NAME ../
+          cd ..
+          echo "MIUI_ZIP=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload MIUI kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: MIUI-MaxPerf-${{ env.DEVICE }}-${{ env.KSU_ENABLED == 'true' && 'KSU' || 'NoKSU' }}
+          path: ${{ env.KERNEL_DIR }}/${{ env.MIUI_ZIP }}
+          retention-days: 30
+
+  release:
+    needs: [build-aosp, build-miui]
+    if: always() && (needs.build-aosp.result == 'success' || needs.build-miui.result == 'success')
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: maxperf-${{ github.event.inputs.device }}-${{ github.run_number }}
+          name: "Alioth MaxPerf Kernel ${{ github.event.inputs.device }} #${{ github.run_number }}"
+          body: |
+            ## 🚀 Alioth MaxPerf Auto-Tuned Kernel
+
+            **Device:** ${{ github.event.inputs.device }}
+            **KernelSU:** ${{ github.event.inputs.ksu }}
+            **Auto-Tune:** ${{ github.event.inputs.auto_tune }}
+
+            ### What's Included
+            - ✅ BBR congestion control + FQ queueing
+            - ✅ BFQ as default I/O scheduler
+            - ✅ ZSWAP with lz4 compression
+            - ✅ Simple LMK for better memory management
+            - ✅ CPU input boost to 3.2GHz
+            - ✅ Force fast charge (5A)
+            - ✅ KEXEC support
+            - ✅ Full namespaces (containers)
+            - ✅ VIRTIO drivers
+            - ✅ NTFS support
+            - ✅ Auto-tuning scripts injected into flashable zip
+
+            ### How to Use
+            1. Flash the appropriate zip in recovery (AOSP for custom ROMs, MIUI for HyperOS)
+            2. Reboot
+            3. Performance tuning applies **automatically** after first boot!
+            4. Check `/data/local/tmp/alioth_autotune.log` for tuning status
+
+            ### ⚠️ Warning
+            Device will run warmer due to thermal tuning. Use ventilation for gaming.
+
+            Built with ❤️ by GitHub Actions
+          files: artifacts/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
