@@ -90,7 +90,7 @@ jobs:
           CONFIG_TCP_CONG_HYBLA=y
           CONFIG_TCP_CONG_VEGAS=y
           CONFIG_TCP_CONG_NV=y
-          CONFIG_TCP_CONG_SCALABLE=y
+          CONFIG_TCP_CONG_SCHED_BALANCED=y
           CONFIG_TCP_CONG_LP=y
           CONFIG_TCP_CONG_VENO=y
           CONFIG_TCP_CONG_YEAH=y
@@ -313,278 +313,278 @@ jobs:
 
             # Create post-install tuning script
             cat > anykernel/post-install-tune.sh << 'TUNESCRIPT'
-#!/system/bin/sh
-# Auto-Tune Script - Runs automatically after kernel flash
-# AstideLabs Alioth MaxPerf Auto-Tuner
+          #!/system/bin/sh
+          # Auto-Tune Script - Runs automatically after kernel flash
+          # AstideLabs Alioth MaxPerf Auto-Tuner
 
-LOG=/data/local/tmp/alioth_autotune.log
-exec 1>>$LOG 2>&1
+          LOG=/data/local/tmp/alioth_autotune.log
+          exec 1>>$LOG 2>&1
 
-echo "========================================"
-echo "  Alioth Auto-Tuner v2.0"
-echo "  $(date)"
-echo "  Kernel: $(uname -r)"
-echo "========================================"
+          echo "========================================"
+          echo "  Alioth Auto-Tuner v2.0"
+          echo "  $(date)"
+          echo "  Kernel: $(uname -r)"
+          echo "========================================"
 
-# Wait for boot to complete
-sleep 30
+          # Wait for boot to complete
+          sleep 30
 
-# ============================================
-# CPU TUNING
-# ============================================
-echo "[*] Tuning CPU..."
-for cpu in /sys/devices/system/cpu/cpu[0-7]; do
-    if [ -d "$cpu/cpufreq" ]; then
-        if grep -q schedutil $cpu/cpufreq/scaling_available_governors 2>/dev/null; then
-            echo schedutil > $cpu/cpufreq/scaling_governor 2>/dev/null
+          # ============================================
+          # CPU TUNING
+          # ============================================
+          echo "[*] Tuning CPU..."
+          for cpu in /sys/devices/system/cpu/cpu[0-7]; do
+              if [ -d "$cpu/cpufreq" ]; then
+                  if grep -q schedutil $cpu/cpufreq/scaling_available_governors 2>/dev/null; then
+                      echo schedutil > $cpu/cpufreq/scaling_governor 2>/dev/null
 
-            if [ -f $cpu/cpufreq/schedutil/up_rate_limit_us ]; then
-                echo 100 > $cpu/cpufreq/schedutil/up_rate_limit_us 2>/dev/null
-            fi
-            if [ -f $cpu/cpufreq/schedutil/down_rate_limit_us ]; then
-                echo 5000 > $cpu/cpufreq/schedutil/down_rate_limit_us 2>/dev/null
-            fi
-            if [ -f $cpu/cpufreq/schedutil/hispeed_load ]; then
-                echo 85 > $cpu/cpufreq/schedutil/hispeed_load 2>/dev/null
-            fi
-            if [ -f $cpu/cpufreq/schedutil/hispeed_freq ]; then
-                echo 1800000 > $cpu/cpufreq/schedutil/hispeed_freq 2>/dev/null
-            fi
-            if [ -f $cpu/cpufreq/schedutil/pl ]; then
-                echo 1 > $cpu/cpufreq/schedutil/pl 2>/dev/null
-            fi
-        fi
+                      if [ -f $cpu/cpufreq/schedutil/up_rate_limit_us ]; then
+                          echo 100 > $cpu/cpufreq/schedutil/up_rate_limit_us 2>/dev/null
+                      fi
+                      if [ -f $cpu/cpufreq/schedutil/down_rate_limit_us ]; then
+                          echo 5000 > $cpu/cpufreq/schedutil/down_rate_limit_us 2>/dev/null
+                      fi
+                      if [ -f $cpu/cpufreq/schedutil/hispeed_load ]; then
+                          echo 85 > $cpu/cpufreq/schedutil/hispeed_load 2>/dev/null
+                      fi
+                      if [ -f $cpu/cpufreq/schedutil/hispeed_freq ]; then
+                          echo 1800000 > $cpu/cpufreq/schedutil/hispeed_freq 2>/dev/null
+                      fi
+                      if [ -f $cpu/cpufreq/schedutil/pl ]; then
+                          echo 1 > $cpu/cpufreq/schedutil/pl 2>/dev/null
+                      fi
+                  fi
 
-        max=$(cat $cpu/cpufreq/cpuinfo_max_freq 2>/dev/null)
-        [ -n "$max" ] && echo "$max" > $cpu/cpufreq/scaling_max_freq 2>/dev/null
-    fi
-done
+                  max=$(cat $cpu/cpufreq/cpuinfo_max_freq 2>/dev/null)
+                  [ -n "$max" ] && echo "$max" > $cpu/cpufreq/scaling_max_freq 2>/dev/null
+              fi
+          done
 
-if [ -d /sys/module/cpu_boost ]; then
-    [ -f /sys/module/cpu_boost/parameters/input_boost_enabled ] && echo 1 > /sys/module/cpu_boost/parameters/input_boost_enabled 2>/dev/null
-    [ -f /sys/module/cpu_boost/parameters/input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/input_boost_freq 2>/dev/null
-    [ -f /sys/module/cpu_boost/parameters/input_boost_ms ] && echo 150 > /sys/module/cpu_boost/parameters/input_boost_ms 2>/dev/null
-    [ -f /sys/module/cpu_boost/parameters/powerkey_input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/powerkey_input_boost_freq 2>/dev/null
-    [ -f /sys/module/cpu_boost/parameters/powerkey_input_boost_ms ] && echo 300 > /sys/module/cpu_boost/parameters/powerkey_input_boost_ms 2>/dev/null
-fi
+          if [ -d /sys/module/cpu_boost ]; then
+              [ -f /sys/module/cpu_boost/parameters/input_boost_enabled ] && echo 1 > /sys/module/cpu_boost/parameters/input_boost_enabled 2>/dev/null
+              [ -f /sys/module/cpu_boost/parameters/input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/input_boost_freq 2>/dev/null
+              [ -f /sys/module/cpu_boost/parameters/input_boost_ms ] && echo 150 > /sys/module/cpu_boost/parameters/input_boost_ms 2>/dev/null
+              [ -f /sys/module/cpu_boost/parameters/powerkey_input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/powerkey_input_boost_freq 2>/dev/null
+              [ -f /sys/module/cpu_boost/parameters/powerkey_input_boost_ms ] && echo 300 > /sys/module/cpu_boost/parameters/powerkey_input_boost_ms 2>/dev/null
+          fi
 
-# ============================================
-# GPU TUNING
-# ============================================
-echo "[*] Tuning GPU..."
-if [ -d /sys/class/kgsl/kgsl-3d0 ]; then
-    GPU=/sys/class/kgsl/kgsl-3d0
-    [ -f $GPU/devfreq/governor ] && echo msm-adreno-tz > $GPU/devfreq/governor 2>/dev/null
-    [ -f $GPU/throttling ] && echo 1 > $GPU/throttling 2>/dev/null
-    [ -f $GPU/bus_split ] && echo 0 > $GPU/bus_split 2>/dev/null
-    [ -f $GPU/force_clk_on ] && echo 0 > $GPU/force_clk_on 2>/dev/null
-    [ -f $GPU/force_bus_on ] && echo 0 > $GPU/force_bus_on 2>/dev/null
-    [ -f $GPU/force_rail_on ] && echo 0 > $GPU/force_rail_on 2>/dev/null
-    [ -f $GPU/force_no_nap ] && echo 1 > $GPU/force_no_nap 2>/dev/null
-    [ -f $GPU/min_pwrlevel ] && echo 0 > $GPU/min_pwrlevel 2>/dev/null
-    [ -f $GPU/max_pwrlevel ] && echo 0 > $GPU/max_pwrlevel 2>/dev/null
-    [ -f $GPU/idle_timer ] && echo 10000 > $GPU/idle_timer 2>/dev/null
-    [ -f $GPU/nap_allowed ] && echo 0 > $GPU/nap_allowed 2>/dev/null
+          # ============================================
+          # GPU TUNING
+          # ============================================
+          echo "[*] Tuning GPU..."
+          if [ -d /sys/class/kgsl/kgsl-3d0 ]; then
+              GPU=/sys/class/kgsl/kgsl-3d0
+              [ -f $GPU/devfreq/governor ] && echo msm-adreno-tz > $GPU/devfreq/governor 2>/dev/null
+              [ -f $GPU/throttling ] && echo 1 > $GPU/throttling 2>/dev/null
+              [ -f $GPU/bus_split ] && echo 0 > $GPU/bus_split 2>/dev/null
+              [ -f $GPU/force_clk_on ] && echo 0 > $GPU/force_clk_on 2>/dev/null
+              [ -f $GPU/force_bus_on ] && echo 0 > $GPU/force_bus_on 2>/dev/null
+              [ -f $GPU/force_rail_on ] && echo 0 > $GPU/force_rail_on 2>/dev/null
+              [ -f $GPU/force_no_nap ] && echo 1 > $GPU/force_no_nap 2>/dev/null
+              [ -f $GPU/min_pwrlevel ] && echo 0 > $GPU/min_pwrlevel 2>/dev/null
+              [ -f $GPU/max_pwrlevel ] && echo 0 > $GPU/max_pwrlevel 2>/dev/null
+              [ -f $GPU/idle_timer ] && echo 10000 > $GPU/idle_timer 2>/dev/null
+              [ -f $GPU/nap_allowed ] && echo 0 > $GPU/nap_allowed 2>/dev/null
 
-    if [ -f $GPU/devfreq/min_freq ]; then
-        min=$(cat $GPU/devfreq/available_frequencies 2>/dev/null | awk '{print $1}')
-        [ -n "$min" ] && echo "$min" > $GPU/devfreq/min_freq 2>/dev/null
-    fi
-    if [ -f $GPU/devfreq/max_freq ]; then
-        max=$(cat $GPU/devfreq/available_frequencies 2>/dev/null | awk '{print $NF}')
-        [ -n "$max" ] && echo "$max" > $GPU/devfreq/max_freq 2>/dev/null
-    fi
-fi
+              if [ -f $GPU/devfreq/min_freq ]; then
+                  min=$(cat $GPU/devfreq/available_frequencies 2>/dev/null | awk '{print $1}')
+                  [ -n "$min" ] && echo "$min" > $GPU/devfreq/min_freq 2>/dev/null
+              fi
+              if [ -f $GPU/devfreq/max_freq ]; then
+                  max=$(cat $GPU/devfreq/available_frequencies 2>/dev/null | awk '{print $NF}')
+                  [ -n "$max" ] && echo "$max" > $GPU/devfreq/max_freq 2>/dev/null
+              fi
+          fi
 
-# ============================================
-# I/O TUNING
-# ============================================
-echo "[*] Tuning I/O..."
-for block in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
-    if [ -d "$block" ]; then
-        if [ -f $block/queue/scheduler ]; then
-            scheds=$(cat $block/queue/scheduler)
-            if echo "$scheds" | grep -q "bfq"; then
-                echo bfq > $block/queue/scheduler 2>/dev/null
-            elif echo "$scheds" | grep -q "mq-deadline"; then
-                echo mq-deadline > $block/queue/scheduler 2>/dev/null
-            fi
-        fi
-        echo 0 > $block/queue/iostats 2>/dev/null
-        echo 1 > $block/queue/rq_affinity 2>/dev/null
-        echo 128 > $block/queue/read_ahead_kb 2>/dev/null
-        echo 0 > $block/queue/add_random 2>/dev/null
-        echo 0 > $block/queue/rotational 2>/dev/null
-        echo 256 > $block/queue/nr_requests 2>/dev/null
+          # ============================================
+          # I/O TUNING
+          # ============================================
+          echo "[*] Tuning I/O..."
+          for block in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
+              if [ -d "$block" ]; then
+                  if [ -f $block/queue/scheduler ]; then
+                      scheds=$(cat $block/queue/scheduler)
+                      if echo "$scheds" | grep -q "bfq"; then
+                          echo bfq > $block/queue/scheduler 2>/dev/null
+                      elif echo "$scheds" | grep -q "mq-deadline"; then
+                          echo mq-deadline > $block/queue/scheduler 2>/dev/null
+                      fi
+                  fi
+                  echo 0 > $block/queue/iostats 2>/dev/null
+                  echo 1 > $block/queue/rq_affinity 2>/dev/null
+                  echo 128 > $block/queue/read_ahead_kb 2>/dev/null
+                  echo 0 > $block/queue/add_random 2>/dev/null
+                  echo 0 > $block/queue/rotational 2>/dev/null
+                  echo 256 > $block/queue/nr_requests 2>/dev/null
 
-        if [ -f $block/queue/iosched/low_latency ]; then
-            echo 0 > $block/queue/iosched/low_latency 2>/dev/null
-        fi
-        if [ -f $block/queue/iosched/idle_slice ]; then
-            echo 0 > $block/queue/iosched/idle_slice 2>/dev/null
-        fi
-    fi
-done
+                  if [ -f $block/queue/iosched/low_latency ]; then
+                      echo 0 > $block/queue/iosched/low_latency 2>/dev/null
+                  fi
+                  if [ -f $block/queue/iosched/idle_slice ]; then
+                      echo 0 > $block/queue/iosched/idle_slice 2>/dev/null
+                  fi
+              fi
+          done
 
-# ============================================
-# MEMORY TUNING
-# ============================================
-echo "[*] Tuning Memory..."
-echo 20 > /proc/sys/vm/swappiness 2>/dev/null
-echo 10 > /proc/sys/vm/vfs_cache_pressure 2>/dev/null
-echo 128 > /proc/sys/vm/dirty_background_ratio 2>/dev/null
-echo 256 > /proc/sys/vm/dirty_ratio 2>/dev/null
-echo 5000 > /proc/sys/vm/dirty_expire_centisecs 2>/dev/null
-echo 1000 > /proc/sys/vm/dirty_writeback_centisecs 2>/dev/null
-echo 0 > /proc/sys/vm/page-cluster 2>/dev/null
-echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+          # ============================================
+          # MEMORY TUNING
+          # ============================================
+          echo "[*] Tuning Memory..."
+          echo 20 > /proc/sys/vm/swappiness 2>/dev/null
+          echo 10 > /proc/sys/vm/vfs_cache_pressure 2>/dev/null
+          echo 128 > /proc/sys/vm/dirty_background_ratio 2>/dev/null
+          echo 256 > /proc/sys/vm/dirty_ratio 2>/dev/null
+          echo 5000 > /proc/sys/vm/dirty_expire_centisecs 2>/dev/null
+          echo 1000 > /proc/sys/vm/dirty_writeback_centisecs 2>/dev/null
+          echo 0 > /proc/sys/vm/page-cluster 2>/dev/null
+          echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
 
-# ZRAM
-if [ -b /dev/block/zram0 ] && ! grep -q zram0 /proc/swaps 2>/dev/null; then
-    swapoff /dev/block/zram0 2>/dev/null
-    echo 1 > /sys/block/zram0/reset 2>/dev/null
-    if [ -f /sys/block/zram0/comp_algorithm ]; then
-        algos=$(cat /sys/block/zram0/comp_algorithm)
-        if echo "$algos" | grep -q "lz4"; then
-            echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null
-        elif echo "$algos" | grep -q "zstd"; then
-            echo zstd > /sys/block/zram0/comp_algorithm 2>/dev/null
-        fi
-    fi
-    echo 4294967296 > /sys/block/zram0/disksize 2>/dev/null
-    mkswap /dev/block/zram0 2>/dev/null
-    swapon /dev/block/zram0 2>/dev/null
-    echo "[OK] ZRAM: 4GB configured"
-fi
+          # ZRAM
+          if [ -b /dev/block/zram0 ] && ! grep -q zram0 /proc/swaps 2>/dev/null; then
+              swapoff /dev/block/zram0 2>/dev/null
+              echo 1 > /sys/block/zram0/reset 2>/dev/null
+              if [ -f /sys/block/zram0/comp_algorithm ]; then
+                  algos=$(cat /sys/block/zram0/comp_algorithm)
+                  if echo "$algos" | grep -q "lz4"; then
+                      echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null
+                  elif echo "$algos" | grep -q "zstd"; then
+                      echo zstd > /sys/block/zram0/comp_algorithm 2>/dev/null
+                  fi
+              fi
+              echo 4294967296 > /sys/block/zram0/disksize 2>/dev/null
+              mkswap /dev/block/zram0 2>/dev/null
+              swapon /dev/block/zram0 2>/dev/null
+              echo "[OK] ZRAM: 4GB configured"
+          fi
 
-# ============================================
-# NETWORK TUNING (BBR is now compiled in!)
-# ============================================
-echo "[*] Tuning Network..."
-if [ -f /proc/sys/net/ipv4/tcp_available_congestion_control ]; then
-    avail=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
-    if echo "$avail" | grep -q "bbr"; then
-        echo bbr > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
-        echo "[OK] BBR enabled!"
-    elif echo "$avail" | grep -q "cubic"; then
-        echo cubic > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
-        echo "[OK] CUBIC enabled (BBR fallback)"
-    fi
-fi
+          # ============================================
+          # NETWORK TUNING (BBR is now compiled in!)
+          # ============================================
+          echo "[*] Tuning Network..."
+          if [ -f /proc/sys/net/ipv4/tcp_available_congestion_control ]; then
+              avail=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
+              if echo "$avail" | grep -q "bbr"; then
+                  echo bbr > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
+                  echo "[OK] BBR enabled!"
+              elif echo "$avail" | grep -q "cubic"; then
+                  echo cubic > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
+                  echo "[OK] CUBIC enabled (BBR fallback)"
+              fi
+          fi
 
-echo 1 > /proc/sys/net/ipv4/tcp_ecn 2>/dev/null
-echo 3 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_tw_reuse 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_sack 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_fack 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_timestamps 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_window_scaling 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_moderate_rcvbuf 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_no_metrics_save 2>/dev/null
-echo 50 > /proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null
-echo 10 > /proc/sys/net/ipv4/tcp_keepalive_intvl 2>/dev/null
-echo 3 > /proc/sys/net/ipv4/tcp_keepalive_probes 2>/dev/null
-echo 8192 > /proc/sys/net/core/rmem_default 2>/dev/null
-echo 8192 > /proc/sys/net/core/wmem_default 2>/dev/null
-echo 2097152 > /proc/sys/net/core/rmem_max 2>/dev/null
-echo 2097152 > /proc/sys/net/core/wmem_max 2>/dev/null
-echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
-echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
-echo 1 > /proc/sys/net/ipv4/tcp_low_latency 2>/dev/null
-echo 0 > /proc/sys/net/ipv4/tcp_slow_start_after_idle 2>/dev/null
-echo 3000 > /proc/sys/net/core/netdev_max_backlog 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_ecn 2>/dev/null
+          echo 3 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_tw_reuse 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_sack 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_fack 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_timestamps 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_window_scaling 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_moderate_rcvbuf 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_no_metrics_save 2>/dev/null
+          echo 50 > /proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null
+          echo 10 > /proc/sys/net/ipv4/tcp_keepalive_intvl 2>/dev/null
+          echo 3 > /proc/sys/net/ipv4/tcp_keepalive_probes 2>/dev/null
+          echo 8192 > /proc/sys/net/core/rmem_default 2>/dev/null
+          echo 8192 > /proc/sys/net/core/wmem_default 2>/dev/null
+          echo 2097152 > /proc/sys/net/core/rmem_max 2>/dev/null
+          echo 2097152 > /proc/sys/net/core/wmem_max 2>/dev/null
+          echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
+          echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
+          echo 1 > /proc/sys/net/ipv4/tcp_low_latency 2>/dev/null
+          echo 0 > /proc/sys/net/ipv4/tcp_slow_start_after_idle 2>/dev/null
+          echo 3000 > /proc/sys/net/core/netdev_max_backlog 2>/dev/null
 
-# ============================================
-# SCHEDULER TUNING (WALT + SchedTune)
-# ============================================
-echo "[*] Tuning Scheduler..."
-[ -f /proc/sys/kernel/sched_upmigrate ] && echo 95 > /proc/sys/kernel/sched_upmigrate 2>/dev/null
-[ -f /proc/sys/kernel/sched_downmigrate ] && echo 85 > /proc/sys/kernel/sched_downmigrate 2>/dev/null
-[ -f /proc/sys/kernel/sched_group_upmigrate ] && echo 100 > /proc/sys/kernel/sched_group_upmigrate 2>/dev/null
-[ -f /proc/sys/kernel/sched_group_downmigrate ] && echo 90 > /proc/sys/kernel/sched_group_downmigrate 2>/dev/null
-[ -f /proc/sys/kernel/sched_ravg_hist_size ] && echo 10 > /proc/sys/kernel/sched_ravg_hist_size 2>/dev/null
-[ -f /proc/sys/kernel/sched_walt_rotate_big_tasks ] && echo 1 > /proc/sys/kernel/sched_walt_rotate_big_tasks 2>/dev/null
-[ -f /proc/sys/kernel/sched_min_task_util_for_boost ] && echo 100 > /proc/sys/kernel/sched_min_task_util_for_boost 2>/dev/null
-[ -f /proc/sys/kernel/sched_min_task_util_for_colocation ] && echo 200 > /proc/sys/kernel/sched_min_task_util_for_colocation 2>/dev/null
+          # ============================================
+          # SCHEDULER TUNING (WALT + SchedTune)
+          # ============================================
+          echo "[*] Tuning Scheduler..."
+          [ -f /proc/sys/kernel/sched_upmigrate ] && echo 95 > /proc/sys/kernel/sched_upmigrate 2>/dev/null
+          [ -f /proc/sys/kernel/sched_downmigrate ] && echo 85 > /proc/sys/kernel/sched_downmigrate 2>/dev/null
+          [ -f /proc/sys/kernel/sched_group_upmigrate ] && echo 100 > /proc/sys/kernel/sched_group_upmigrate 2>/dev/null
+          [ -f /proc/sys/kernel/sched_group_downmigrate ] && echo 90 > /proc/sys/kernel/sched_group_downmigrate 2>/dev/null
+          [ -f /proc/sys/kernel/sched_ravg_hist_size ] && echo 10 > /proc/sys/kernel/sched_ravg_hist_size 2>/dev/null
+          [ -f /proc/sys/kernel/sched_walt_rotate_big_tasks ] && echo 1 > /proc/sys/kernel/sched_walt_rotate_big_tasks 2>/dev/null
+          [ -f /proc/sys/kernel/sched_min_task_util_for_boost ] && echo 100 > /proc/sys/kernel/sched_min_task_util_for_boost 2>/dev/null
+          [ -f /proc/sys/kernel/sched_min_task_util_for_colocation ] && echo 200 > /proc/sys/kernel/sched_min_task_util_for_colocation 2>/dev/null
 
-if [ -d /dev/stune ]; then
-    [ -f /dev/stune/top-app/schedtune.boost ] && echo 50 > /dev/stune/top-app/schedtune.boost 2>/dev/null
-    [ -f /dev/stune/top-app/schedtune.prefer_idle ] && echo 1 > /dev/stune/top-app/schedtune.prefer_idle 2>/dev/null
-    [ -f /dev/stune/foreground/schedtune.boost ] && echo 20 > /dev/stune/foreground/schedtune.boost 2>/dev/null
-    [ -f /dev/stune/rt/schedtune.boost ] && echo 100 > /dev/stune/rt/schedtune.boost 2>/dev/null
-fi
+          if [ -d /dev/stune ]; then
+              [ -f /dev/stune/top-app/schedtune.boost ] && echo 50 > /dev/stune/top-app/schedtune.boost 2>/dev/null
+              [ -f /dev/stune/top-app/schedtune.prefer_idle ] && echo 1 > /dev/stune/top-app/schedtune.prefer_idle 2>/dev/null
+              [ -f /dev/stune/foreground/schedtune.boost ] && echo 20 > /dev/stune/foreground/schedtune.boost 2>/dev/null
+              [ -f /dev/stune/rt/schedtune.boost ] && echo 100 > /dev/stune/rt/schedtune.boost 2>/dev/null
+          fi
 
-# ============================================
-# THERMAL TUNING
-# ============================================
-echo "[*] Tuning Thermal..."
-for zone in /sys/class/thermal/thermal_zone*; do
-    if [ -d "$zone" ]; then
-        type=$(cat $zone/type 2>/dev/null)
-        if echo "$type" | grep -qiE "cpu|cluster|gpu|pmic|modem"; then
-            for trip in $zone/trip_point_*_temp; do
-                if [ -f "$trip" ]; then
-                    current=$(cat "$trip" 2>/dev/null)
-                    if [ -n "$current" ] && [ "$current" -gt 0 ] && [ "$current" -lt 100000 ]; then
-                        new=$((current + 3000))
-                        echo "$new" > "$trip" 2>/dev/null
-                    fi
-                fi
-            done
-        fi
-    fi
-done
+          # ============================================
+          # THERMAL TUNING
+          # ============================================
+          echo "[*] Tuning Thermal..."
+          for zone in /sys/class/thermal/thermal_zone*; do
+              if [ -d "$zone" ]; then
+                  type=$(cat $zone/type 2>/dev/null)
+                  if echo "$type" | grep -qiE "cpu|cluster|gpu|pmic|modem"; then
+                      for trip in $zone/trip_point_*_temp; do
+                          if [ -f "$trip" ]; then
+                              current=$(cat "$trip" 2>/dev/null)
+                              if [ -n "$current" ] && [ "$current" -gt 0 ] && [ "$current" -lt 100000 ]; then
+                                  new=$((current + 3000))
+                                  echo "$new" > "$trip" 2>/dev/null
+                              fi
+                          fi
+                      done
+                  fi
+              fi
+          done
 
-# ============================================
-# TOUCH TUNING
-# ============================================
-echo "[*] Tuning Touch..."
-[ -f /sys/class/touch/touch_dev/palm_detect ] && echo 0 > /sys/class/touch/touch_dev/palm_detect 2>/dev/null
-[ -f /sys/class/touch/touch_dev/grip_enable ] && echo 0 > /sys/class/touch/touch_dev/grip_enable 2>/dev/null
-[ -f /sys/class/touch/touch_dev/edge_suppress ] && echo 0 > /sys/class/touch/touch_dev/edge_suppress 2>/dev/null
-[ -f /sys/class/touch/touch_dev/smooth_level ] && echo 0 > /sys/class/touch/touch_dev/smooth_level 2>/dev/null
+          # ============================================
+          # TOUCH TUNING
+          # ============================================
+          echo "[*] Tuning Touch..."
+          [ -f /sys/class/touch/touch_dev/palm_detect ] && echo 0 > /sys/class/touch/touch_dev/palm_detect 2>/dev/null
+          [ -f /sys/class/touch/touch_dev/grip_enable ] && echo 0 > /sys/class/touch/touch_dev/grip_enable 2>/dev/null
+          [ -f /sys/class/touch/touch_dev/edge_suppress ] && echo 0 > /sys/class/touch/touch_dev/edge_suppress 2>/dev/null
+          [ -f /sys/class/touch/touch_dev/smooth_level ] && echo 0 > /sys/class/touch/touch_dev/smooth_level 2>/dev/null
 
-# ============================================
-# FAST CHARGE
-# ============================================
-echo "[*] Tuning Fast Charge..."
-[ -f /sys/class/power_supply/battery/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/battery/constant_charge_current_max 2>/dev/null
-[ -f /sys/class/power_supply/usb/pd_current_max ] && echo 5000000 > /sys/class/power_supply/usb/pd_current_max 2>/dev/null
-[ -f /sys/class/power_supply/battery/input_current_max ] && echo 5000000 > /sys/class/power_supply/battery/input_current_max 2>/dev/null
-[ -f /sys/class/power_supply/main/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/main/constant_charge_current_max 2>/dev/null
-[ -f /sys/class/power_supply/battery/step_charging_enabled ] && echo 0 > /sys/class/power_supply/battery/step_charging_enabled 2>/dev/null
-[ -f /sys/class/power_supply/battery/thermal_limit ] && echo 10 > /sys/class/power_supply/battery/thermal_limit 2>/dev/null
+          # ============================================
+          # FAST CHARGE
+          # ============================================
+          echo "[[*] Tuning Fast Charge..."
+          [ -f /sys/class/power_supply/battery/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/battery/constant_charge_current_max 2>/dev/null
+          [ -f /sys/class/power_supply/usb/pd_current_max ] && echo 5000000 > /sys/class/power_supply/usb/pd_current_max 2>/dev/null
+          [ -f /sys/class/power_supply/battery/input_current_max ] && echo 5000000 > /sys/class/power_supply/battery/input_current_max 2>/dev/null
+          [ -f /sys/class/power_supply/main/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/main/constant_charge_current_max 2>/dev/null
+          [ -f /sys/class/power_supply/battery/step_charging_enabled ] && echo 0 > /sys/class/power_supply/battery/step_charging_enabled 2>/dev/null
+          [ -f /sys/class/power_supply/battery/thermal_limit ] && echo 10 > /sys/class/power_supply/battery/thermal_limit 2>/dev/null
 
-# ============================================
-# MIUI/HyperOS DEVFREQ
-# ============================================
-echo "[*] Tuning Devfreq..."
-[ -f /sys/class/devfreq/soc:qcom,cpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,cpubw/governor 2>/dev/null
-[ -f /sys/class/devfreq/soc:qcom,gpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,gpubw/governor 2>/dev/null
-[ -f /sys/class/devfreq/soc:qcom,llccbw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,llccbw/governor 2>/dev/null
+          # ============================================
+          # MIUI/HyperOS DEVFREQ
+          # ============================================
+          echo "[*] Tuning Devfreq..."
+          [ -f /sys/class/devfreq/soc:qcom,cpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,cpubw/governor 2>/dev/null
+          [ -f /sys/class/devfreq/soc:qcom,gpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,gpubw/governor 2>/dev/null
+          [ -f /sys/class/devfreq/soc:qcom,llccbw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,llccbw/governor 2>/dev/null
 
-# ============================================
-# REDUCE LOGGING
-# ============================================
-echo 0 > /proc/sys/kernel/printk 2>/dev/null
-echo 0 > /sys/kernel/debug/tracing/tracing_on 2>/dev/null
+          # ============================================
+          # REDUCE LOGGING
+          # ============================================
+          echo 0 > /proc/sys/kernel/printk 2>/dev/null
+          echo 0 > /sys/kernel/debug/tracing/tracing_on 2>/dev/null
 
-echo "========================================"
-echo "  Auto-Tune Complete!"
-echo "  All systems optimized for max perf."
-echo "========================================"
-TUNESCRIPT
+          echo "========================================"
+          echo "  Auto-Tune Complete!"
+          echo "  All systems optimized for max perf."
+          echo "========================================"
+          TUNESCRIPT
             chmod +x anykernel/post-install-tune.sh
 
             # Modify anykernel.sh to run the tune script after install
             sed -i '/dump_boot;/a\n# Auto-tune after kernel install
-if [ -f "$home/post-install-tune.sh" ]; then
-  ui_print "[-] Applying performance tuning...";
-  cp "$home/post-install-tune.sh" /data/local/tmp/;
-  chmod +x /data/local/tmp/post-install-tune.sh;
-  nohup sh /data/local/tmp/post-install-tune.sh >/dev/null 2>&1 &
-  ui_print "[-] Performance tuning applied!";
-fi' anykernel/anykernel.sh
+          if [ -f "$home/post-install-tune.sh" ]; then
+            ui_print "[-] Applying performance tuning...";
+            cp "$home/post-install-tune.sh" /data/local/tmp/;
+            chmod +x /data/local/tmp/post-install-tune.sh;
+            nohup sh /data/local/tmp/post-install-tune.sh >/dev/null 2>&1 &
+            ui_print "[-] Performance tuning applied!";
+          fi' anykernel/anykernel.sh
 
             echo "Auto-tune scripts injected!"
           fi
@@ -929,154 +929,154 @@ fi' anykernel/anykernel.sh
             echo "Injecting auto-tune scripts into MIUI AnyKernel3..."
 
             cat > anykernel/post-install-tune.sh << 'TUNESCRIPT'
-#!/system/bin/sh
-# Auto-Tune Script - MIUI Variant
-# AstideLabs Alioth MaxPerf Auto-Tuner
+          #!/system/bin/sh
+          # Auto-Tune Script - MIUI Variant
+          # AstideLabs Alioth MaxPerf Auto-Tuner
 
-LOG=/data/local/tmp/alioth_autotune.log
-exec 1>>$LOG 2>&1
+          LOG=/data/local/tmp/alioth_autotune.log
+          exec 1>>$LOG 2>&1
 
-echo "========================================"
-echo "  Alioth Auto-Tuner v2.0 (MIUI)"
-echo "  $(date)"
-echo "  Kernel: $(uname -r)"
-echo "========================================"
+          echo "========================================"
+          echo "  Alioth Auto-Tuner v2.0 (MIUI)"
+          echo "  $(date)"
+          echo "  Kernel: $(uname -r)"
+          echo "========================================"
 
-sleep 30
+          sleep 30
 
-# CPU
-echo "[*] Tuning CPU..."
-for cpu in /sys/devices/system/cpu/cpu[0-7]; do
-    if [ -d "$cpu/cpufreq" ]; then
-        if grep -q schedutil $cpu/cpufreq/scaling_available_governors 2>/dev/null; then
-            echo schedutil > $cpu/cpufreq/scaling_governor 2>/dev/null
-            [ -f $cpu/cpufreq/schedutil/up_rate_limit_us ] && echo 100 > $cpu/cpufreq/schedutil/up_rate_limit_us 2>/dev/null
-            [ -f $cpu/cpufreq/schedutil/down_rate_limit_us ] && echo 5000 > $cpu/cpufreq/schedutil/down_rate_limit_us 2>/dev/null
-        fi
-        max=$(cat $cpu/cpufreq/cpuinfo_max_freq 2>/dev/null)
-        [ -n "$max" ] && echo "$max" > $cpu/cpufreq/scaling_max_freq 2>/dev/null
-    fi
-done
+          # CPU
+          echo "[*] Tuning CPU..."
+          for cpu in /sys/devices/system/cpu/cpu[0-7]; do
+              if [ -d "$cpu/cpufreq" ]; then
+                  if grep -q schedutil $cpu/cpufreq/scaling_available_governors 2>/dev/null; then
+                      echo schedutil > $cpu/cpufreq/scaling_governor 2>/dev/null
+                      [ -f $cpu/cpufreq/schedutil/up_rate_limit_us ] && echo 100 > $cpu/cpufreq/schedutil/up_rate_limit_us 2>/dev/null
+                      [ -f $cpu/cpufreq/schedutil/down_rate_limit_us ] && echo 5000 > $cpu/cpufreq/schedutil/down_rate_limit_us 2>/dev/null
+                  fi
+                  max=$(cat $cpu/cpufreq/cpuinfo_max_freq 2>/dev/null)
+                  [ -n "$max" ] && echo "$max" > $cpu/cpufreq/scaling_max_freq 2>/dev/null
+              fi
+          done
 
-if [ -d /sys/module/cpu_boost ]; then
-    [ -f /sys/module/cpu_boost/parameters/input_boost_enabled ] && echo 1 > /sys/module/cpu_boost/parameters/input_boost_enabled 2>/dev/null
-    [ -f /sys/module/cpu_boost/parameters/input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/input_boost_freq 2>/dev/null
-    [ -f /sys/module/cpu_boost/parameters/input_boost_ms ] && echo 150 > /sys/module/cpu_boost/parameters/input_boost_ms 2>/dev/null
-fi
+          if [ -d /sys/module/cpu_boost ]; then
+              [ -f /sys/module/cpu_boost/parameters/input_boost_enabled ] && echo 1 > /sys/module/cpu_boost/parameters/input_boost_enabled 2>/dev/null
+              [ -f /sys/module/cpu_boost/parameters/input_boost_freq ] && echo "0:1800000 1:1800000 2:1800000 3:1800000 4:2400000 5:2400000 6:2400000 7:3200000" > /sys/module/cpu_boost/parameters/input_boost_freq 2>/dev/null
+              [ -f /sys/module/cpu_boost/parameters/input_boost_ms ] && echo 150 > /sys/module/cpu_boost/parameters/input_boost_ms 2>/dev/null
+          fi
 
-# GPU
-if [ -d /sys/class/kgsl/kgsl-3d0 ]; then
-    GPU=/sys/class/kgsl/kgsl-3d0
-    [ -f $GPU/devfreq/governor ] && echo msm-adreno-tz > $GPU/devfreq/governor 2>/dev/null
-    [ -f $GPU/throttling ] && echo 1 > $GPU/throttling 2>/dev/null
-    [ -f $GPU/bus_split ] && echo 0 > $GPU/bus_split 2>/dev/null
-    [ -f $GPU/force_no_nap ] && echo 1 > $GPU/force_no_nap 2>/dev/null
-    [ -f $GPU/min_pwrlevel ] && echo 0 > $GPU/min_pwrlevel 2>/dev/null
-    [ -f $GPU/idle_timer ] && echo 10000 > $GPU/idle_timer 2>/dev/null
-    [ -f $GPU/nap_allowed ] && echo 0 > $GPU/nap_allowed 2>/dev/null
-fi
+          # GPU
+          if [ -d /sys/class/kgsl/kgsl-3d0 ]; then
+              GPU=/sys/class/kgsl/kgsl-3d0
+              [ -f $GPU/devfreq/governor ] && echo msm-adreno-tz > $GPU/devfreq/governor 2>/dev/null
+              [ -f $GPU/throttling ] && echo 1 > $GPU/throttling 2>/dev/null
+              [ -f $GPU/bus_split ] && echo 0 > $GPU/bus_split 2>/dev/null
+              [ -f $GPU/force_no_nap ] && echo 1 > $GPU/force_no_nap 2>/dev/null
+              [ -f $GPU/min_pwrlevel ] && echo 0 > $GPU/min_pwrlevel 2>/dev/null
+              [ -f $GPU/idle_timer ] && echo 10000 > $GPU/idle_timer 2>/dev/null
+              [ -f $GPU/nap_allowed ] && echo 0 > $GPU/nap_allowed 2>/dev/null
+          fi
 
-# I/O
-for block in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
-    if [ -d "$block" ]; then
-        if [ -f $block/queue/scheduler ]; then
-            scheds=$(cat $block/queue/scheduler)
-            if echo "$scheds" | grep -q "bfq"; then
-                echo bfq > $block/queue/scheduler 2>/dev/null
-            elif echo "$scheds" | grep -q "mq-deadline"; then
-                echo mq-deadline > $block/queue/scheduler 2>/dev/null
-            fi
-        fi
-        echo 0 > $block/queue/iostats 2>/dev/null
-        echo 128 > $block/queue/read_ahead_kb 2>/dev/null
-        echo 0 > $block/queue/add_random 2>/dev/null
-        echo 256 > $block/queue/nr_requests 2>/dev/null
-    fi
-done
+          # I/O
+          for block in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
+              if [ -d "$block" ]; then
+                  if [ -f $block/queue/scheduler ]; then
+                      scheds=$(cat $block/queue/scheduler)
+                      if echo "$scheds" | grep -q "bfq"; then
+                          echo bfq > $block/queue/scheduler 2>/dev/null
+                      elif echo "$scheds" | grep -q "mq-deadline"; then
+                          echo mq-deadline > $block/queue/scheduler 2>/dev/null
+                      fi
+                  fi
+                  echo 0 > $block/queue/iostats 2>/dev/null
+                  echo 128 > $block/queue/read_ahead_kb 2>/dev/null
+                  echo 0 > $block/queue/add_random 2>/dev/null
+                  echo 256 > $block/queue/nr_requests 2>/dev/null
+              fi
+          done
 
-# Memory
-echo 20 > /proc/sys/vm/swappiness 2>/dev/null
-echo 10 > /proc/sys/vm/vfs_cache_pressure 2>/dev/null
-echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+          # Memory
+          echo 20 > /proc/sys/vm/swappiness 2>/dev/null
+          echo 10 > /proc/sys/vm/vfs_cache_pressure 2>/dev/null
+          echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
 
-if [ -b /dev/block/zram0 ] && ! grep -q zram0 /proc/swaps 2>/dev/null; then
-    swapoff /dev/block/zram0 2>/dev/null
-    echo 1 > /sys/block/zram0/reset 2>/dev/null
-    [ -f /sys/block/zram0/comp_algorithm ] && echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null
-    echo 4294967296 > /sys/block/zram0/disksize 2>/dev/null
-    mkswap /dev/block/zram0 2>/dev/null
-    swapon /dev/block/zram0 2>/dev/null
-fi
+          if [ -b /dev/block/zram0 ] && ! grep -q zram0 /proc/swaps 2>/dev/null; then
+              swapoff /dev/block/zram0 2>/dev/null
+              echo 1 > /sys/block/zram0/reset 2>/dev/null
+              [ -f /sys/block/zram0/comp_algorithm ] && echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null
+              echo 4294967296 > /sys/block/zram0/disksize 2>/dev/null
+              mkswap /dev/block/zram0 2>/dev/null
+              swapon /dev/block/zram0 2>/dev/null
+          fi
 
-# Network (BBR now available!)
-if [ -f /proc/sys/net/ipv4/tcp_available_congestion_control ]; then
-    avail=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
-    if echo "$avail" | grep -q "bbr"; then
-        echo bbr > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
-        echo "[OK] BBR enabled!"
-    fi
-fi
-echo 1 > /proc/sys/net/ipv4/tcp_ecn 2>/dev/null
-echo 3 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
-echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
-echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
+          # Network (BBR now available!)
+          if [ -f /proc/sys/net/ipv4/tcp_available_congestion_control ]; then
+              avail=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control)
+              if echo "$avail" | grep -q "bbr"; then
+                  echo bbr > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
+                  echo "[OK] BBR enabled!"
+              fi
+          fi
+          echo 1 > /proc/sys/net/ipv4/tcp_ecn 2>/dev/null
+          echo 3 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+          echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null
+          echo "4096 87380 2097152" > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null
 
-# Scheduler
-[ -f /proc/sys/kernel/sched_upmigrate ] && echo 95 > /proc/sys/kernel/sched_upmigrate 2>/dev/null
-[ -f /proc/sys/kernel/sched_downmigrate ] && echo 85 > /proc/sys/kernel/sched_downmigrate 2>/dev/null
-if [ -d /dev/stune ]; then
-    [ -f /dev/stune/top-app/schedtune.boost ] && echo 50 > /dev/stune/top-app/schedtune.boost 2>/dev/null
-    [ -f /dev/stune/top-app/schedtune.prefer_idle ] && echo 1 > /dev/stune/top-app/schedtune.prefer_idle 2>/dev/null
-fi
+          # Scheduler
+          [ -f /proc/sys/kernel/sched_upmigrate ] && echo 95 > /proc/sys/kernel/sched_upmigrate 2>/dev/null
+          [ -f /proc/sys/kernel/sched_downmigrate ] && echo 85 > /proc/sys/kernel/sched_downmigrate 2>/dev/null
+          if [ -d /dev/stune ]; then
+              [ -f /dev/stune/top-app/schedtune.boost ] && echo 50 > /dev/stune/top-app/schedtune.boost 2>/dev/null
+              [ -f /dev/stune/top-app/schedtune.prefer_idle ] && echo 1 > /dev/stune/top-app/schedtune.prefer_idle 2>/dev/null
+          fi
 
-# Thermal
-for zone in /sys/class/thermal/thermal_zone*; do
-    if [ -d "$zone" ]; then
-        type=$(cat $zone/type 2>/dev/null)
-        if echo "$type" | grep -qiE "cpu|cluster|gpu|pmic"; then
-            for trip in $zone/trip_point_*_temp; do
-                if [ -f "$trip" ]; then
-                    current=$(cat "$trip" 2>/dev/null)
-                    if [ -n "$current" ] && [ "$current" -gt 0 ] && [ "$current" -lt 100000 ]; then
-                        new=$((current + 3000))
-                        echo "$new" > "$trip" 2>/dev/null
-                    fi
-                fi
-            done
-        fi
-    fi
-done
+          # Thermal
+          for zone in /sys/class/thermal/thermal_zone*; do
+              if [ -d "$zone" ]; then
+                  type=$(cat $zone/type 2>/dev/null)
+                  if echo "$type" | grep -qiE "cpu|cluster|gpu|pmic"; then
+                      for trip in $zone/trip_point_*_temp; do
+                          if [ -f "$trip" ]; then
+                              current=$(cat "$trip" 2>/dev/null)
+                              if [ -n "$current" ] && [ "$current" -gt 0 ] && [ "$current" -lt 100000 ]; then
+                                  new=$((current + 3000))
+                                  echo "$new" > "$trip" 2>/dev/null
+                              fi
+                          fi
+                      done
+                  fi
+              fi
+          done
 
-# Touch
-[ -f /sys/class/touch/touch_dev/palm_detect ] && echo 0 > /sys/class/touch/touch_dev/palm_detect 2>/dev/null
-[ -f /sys/class/touch/touch_dev/grip_enable ] && echo 0 > /sys/class/touch/touch_dev/grip_enable 2>/dev/null
+          # Touch
+          [ -f /sys/class/touch/touch_dev/palm_detect ] && echo 0 > /sys/class/touch/touch_dev/palm_detect 2>/dev/null
+          [ -f /sys/class/touch/touch_dev/grip_enable ] && echo 0 > /sys/class/touch/touch_dev/grip_enable 2>/dev/null
 
-# Fast Charge
-[ -f /sys/class/power_supply/battery/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/battery/constant_charge_current_max 2>/dev/null
-[ -f /sys/class/power_supply/usb/pd_current_max ] && echo 5000000 > /sys/class/power_supply/usb/pd_current_max 2>/dev/null
-[ -f /sys/class/power_supply/battery/step_charging_enabled ] && echo 0 > /sys/class/power_supply/battery/step_charging_enabled 2>/dev/null
+          # Fast Charge
+          [ -f /sys/class/power_supply/battery/constant_charge_current_max ] && echo 5000000 > /sys/class/power_supply/battery/constant_charge_current_max 2>/dev/null
+          [ -f /sys/class/power_supply/usb/pd_current_max ] && echo 5000000 > /sys/class/power_supply/usb/pd_current_max 2>/dev/null
+          [ -f /sys/class/power_supply/battery/step_charging_enabled ] && echo 0 > /sys/class/power_supply/battery/step_charging_enabled 2>/dev/null
 
-# Devfreq
-[ -f /sys/class/devfreq/soc:qcom,cpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,cpubw/governor 2>/dev/null
-[ -f /sys/class/devfreq/soc:qcom,gpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,gpubw/governor 2>/dev/null
+          # Devfreq
+          [ -f /sys/class/devfreq/soc:qcom,cpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,cpubw/governor 2>/dev/null
+          [ -f /sys/class/devfreq/soc:qcom,gpubw/governor ] && echo performance > /sys/class/devfreq/soc:qcom,gpubw/governor 2>/dev/null
 
-# Logging
-echo 0 > /proc/sys/kernel/printk 2>/dev/null
+          # Logging
+          echo 0 > /proc/sys/kernel/printk 2>/dev/null
 
-echo "========================================"
-echo "  MIUI Auto-Tune Complete!"
-echo "========================================"
-TUNESCRIPT
+          echo "========================================"
+          echo "  MIUI Auto-Tune Complete!"
+          echo "========================================"
+          TUNESCRIPT
             chmod +x anykernel/post-install-tune.sh
 
             sed -i '/dump_boot;/a\n# Auto-tune after kernel install
-if [ -f "$home/post-install-tune.sh" ]; then
-  ui_print "[-] Applying performance tuning...";
-  cp "$home/post-install-tune.sh" /data/local/tmp/;
-  chmod +x /data/local/tmp/post-install-tune.sh;
-  nohup sh /data/local/tmp/post-install-tune.sh >/dev/null 2>&1 &
-  ui_print "[-] Performance tuning applied!";
-fi' anykernel/anykernel.sh
+          if [ -f "$home/post-install-tune.sh" ]; then
+            ui_print "[-] Applying performance tuning...";
+            cp "$home/post-install-tune.sh" /data/local/tmp/;
+            chmod +x /data/local/tmp/post-install-tune.sh;
+            nohup sh /data/local/tmp/post-install-tune.sh >/dev/null 2>&1 &
+            ui_print "[-] Performance tuning applied!";
+          fi' anykernel/anykernel.sh
           fi
 
           cd anykernel
