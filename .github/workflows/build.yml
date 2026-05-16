@@ -58,6 +58,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git curl wget bison flex zip bc cpio libssl-dev ccache tar python3 python-is-python3 jq
 
+      - name: Set KSU Status String
+        run: |
+          if [ "${{ github.event.inputs.ksu }}" == "true" ]; then
+            echo "KSU_NAME=KSU" >> $GITHUB_ENV
+          else
+            echo "KSU_NAME=NoKSU" >> $GITHUB_ENV
+          fi
+
       - name: Setup ZyC-Clang toolchain
         run: |
           mkdir -p $HOME/zyc-clang
@@ -505,7 +513,7 @@ jobs:
           [ -f /proc/sys/kernel/sched_ravg_hist_size ] && echo 10 > /proc/sys/kernel/sched_ravg_hist_size 2>/dev/null
           [ -f /proc/sys/kernel/sched_walt_rotate_big_tasks ] && echo 1 > /proc/sys/kernel/sched_walt_rotate_big_tasks 2>/dev/null
           [ -f /proc/sys/kernel/sched_min_task_util_for_boost ] && echo 100 > /proc/sys/kernel/sched_min_task_util_for_boost 2>/dev/null
-          [ -f /proc/sys/kernel/sched_min_task_util_for_colocation ] && echo 200 > /proc/sys/kernel/sched_min_task_util_for_colocation 2>/dev/null
+          [ -f /sys/kernel/sched_min_task_util_for_colocation ] && echo 200 > /proc/sys/kernel/sched_min_task_util_for_colocation 2>/dev/null
 
           if [ -d /dev/stune ]; then
               [ -f /dev/stune/top-app/schedtune.boost ] && echo 50 > /dev/stune/top-app/schedtune.boost 2>/dev/null
@@ -591,22 +599,15 @@ jobs:
 
           cd anykernel
 
-          KSU_STR="NoKernelSU"
-          if [ "$KSU_ENABLED" == "true" ]; then
-            KSU_STR="ReSukiSU-SuSFS"
-          fi
-
-          ZIP_NAME="APTKernel-MaxPerf_AOSP_${DEVICE}_${KSU_STR}_$(date +'%Y%m%d_%H%M%S')_anykernel3_${GIT_COMMIT}.zip"
-
-          zip -r9 $ZIP_NAME ./* -x .git .gitignore out/ .*.zip
-          mv $ZIP_NAME ../
+          zip -r9 APTKernel-MaxPerf_AOSP_${DEVICE}_${KSU_NAME}_$(date +'%Y%m%d_%H%M%S')_anykernel3_${GIT_COMMIT}.zip ./* -x .git .gitignore out/ .*.zip
+          mv APTKernel-MaxPerf_AOSP_*.zip ../
           cd ..
-          echo "AOSP_ZIP=$ZIP_NAME" >> $GITHUB_ENV
+          echo "AOSP_ZIP=$(ls APTKernel-MaxPerf_AOSP_*.zip)" >> $GITHUB_ENV
 
       - name: Upload AOSP kernel
         uses: actions/upload-artifact@v4
         with:
-          name: AOSP-MaxPerf-${{ env.DEVICE }}-${{ env.KSU_ENABLED == 'true' && 'KSU' || 'NoKSU' }}
+          name: AOSP-MaxPerf-${{ env.DEVICE }}-${{ env.KSU_NAME }}
           path: ${{ env.KERNEL_DIR }}/${{ env.AOSP_ZIP }}
           retention-days: 30
 
@@ -620,6 +621,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential git curl wget bison flex zip bc cpio libssl-dev ccache tar python3 python-is-python3 jq
+
+      - name: Set KSU Status String
+        run: |
+          if [ "${{ github.event.inputs.ksu }}" == "true" ]; then
+            echo "KSU_NAME=KSU" >> $GITHUB_ENV
+          else
+            echo "KSU_NAME=NoKSU" >> $GITHUB_ENV
+          fi
 
       - name: Setup ZyC-Clang toolchain
         run: |
@@ -950,7 +959,7 @@ jobs:
               if [ -d "$cpu/cpufreq" ]; then
                   if grep -q schedutil $cpu/cpufreq/scaling_available_governors 2>/dev/null; then
                       echo schedutil > $cpu/cpufreq/scaling_governor 2>/dev/null
-                      [ -f $cpu/cpufreq/schedutil/up_rate_limit_us ] && echo 100 > $cpu/cpufreq/schedutil/up_rate_limit_us 2>/dev/null
+                      [ -f $cpu/cpufreq/schedutil/up_rate_limit_us ] && echo 100 > $cpu/cpufreq/scaling_governor 2>/dev/null
                       [ -f $cpu/cpufreq/schedutil/down_rate_limit_us ] && echo 5000 > $cpu/cpufreq/schedutil/down_rate_limit_us 2>/dev/null
                   fi
                   max=$(cat $cpu/cpufreq/cpuinfo_max_freq 2>/dev/null)
@@ -1081,22 +1090,15 @@ jobs:
 
           cd anykernel
 
-          KSU_STR="NoKernelSU"
-          if [ "$KSU_ENABLED" == "true" ]; then
-            KSU_STR="ReSukiSU-SuSFS"
-          fi
-
-          ZIP_NAME="APTKernel-MaxPerf_MIUI_${DEVICE}_${KSU_STR}_$(date +'%Y%m%d_%H%M%S')_anykernel3_${GIT_COMMIT}.zip"
-
-          zip -r9 $ZIP_NAME ./* -x .git .gitignore out/ .*.zip
-          mv $ZIP_NAME ../
+          zip -r9 APTKernel-MaxPerf_MIUI_${DEVICE}_${KSU_NAME}_$(date +'%Y%m%d_%H%M%S')_anykernel3_${GIT_COMMIT}.zip ./* -x .git .gitignore out/ .*.zip
+          mv APTKernel-MaxPerf_MIUI_*.zip ../
           cd ..
-          echo "MIUI_ZIP=$ZIP_NAME" >> $GITHUB_ENV
+          echo "MIUI_ZIP=$(ls APTKernel-MaxPerf_MIUI_*.zip)" >> $GITHUB_ENV
 
       - name: Upload MIUI kernel
         uses: actions/upload-artifact@v4
         with:
-          name: MIUI-MaxPerf-${{ env.DEVICE }}-${{ env.KSU_ENABLED == 'true' && 'KSU' || 'NoKSU' }}
+          name: MIUI-MaxPerf-${{ env.DEVICE }}-${{ env.KSU_NAME }}
           path: ${{ env.KERNEL_DIR }}/${{ env.MIUI_ZIP }}
           retention-days: 30
 
