@@ -47,7 +47,7 @@ env:
   AUTO_TUNE: ${{ github.event.inputs.auto_tune }}
 
 jobs:
-  build-aosp:
+  build_aosp:
     if: github.event.inputs.build_aosp == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 120
@@ -611,7 +611,7 @@ jobs:
           path: ${{ env.KERNEL_DIR }}/${{ env.AOSP_ZIP }}
           retention-days: 30
 
-  build-miui:
+  build_miui:
     if: github.event.inputs.build_miui == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 120
@@ -1103,8 +1103,8 @@ jobs:
           retention-days: 30
 
   release:
-    needs: [build-aosp, build-miui]
-    if: always() && (needs.build-aosp.result == 'success' || needs.build-miui.result == 'success')
+    needs: [build_aosp, build_miui]
+    if: always() && (needs.build_aosp.result == 'success' || needs.build_miui.result == 'success')
     runs-on: ubuntu-22.04
 
     steps:
